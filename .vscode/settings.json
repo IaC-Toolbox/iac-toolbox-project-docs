@@ -6,13 +6,8 @@
   "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
   "editor.tabSize": 2,
   "editor.formatOnSave": false,
-
-  // Prettier extension enabled
   "prettier.enable": true,
-
-  // Optional: prettier config path (if you have a .prettierrc)
   "prettier.configPath": ".prettierrc",
-
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
   "files.trimTrailingWhitespace": true,

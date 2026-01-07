@@ -38,7 +38,7 @@ For simplicity, we will define only two public subnets, without private subnets.
 
 First, we will define a resource listing availability zones.
 
-```hcl
+\`\`\`hcl
 # modules/network/main.tf
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -47,7 +47,7 @@ resource "aws_vpc" "main" {
 }
 
 data "aws_availability_zones" "available" {}
-```
+\`\`\`
 
 This resource returns a list of all AZ available in the region configured in the AWS credentials.
 
@@ -55,7 +55,7 @@ This resource returns a list of all AZ available in the region configured in the
 
 We will be using the terraform `count` directive. `count` is used as a loop, so we can define some resource multiple times. Since we only need two public subnets, naturaly the `count=2`. Let's write two public subnets:
 
-```hcl
+\`\`\`hcl
 # modules/network/main.tf
 
 resource "aws_subnet" "public" {
@@ -65,11 +65,11 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   map_public_ip_on_launch = true
 }
-```
+\`\`\`
 
 We are referencing the `data.aws_availability_zones.available.names` defined about to choose an availability name in our `vpc`. Besides that, we need the route table to define how network traffic is directed within our VPC (i.e., after internet gateway).
 
-```hcl
+\`\`\`hcl
 # modules/network/main.tf
 resource "aws_internet_gateway" "my_app" {
   vpc_id = aws_vpc.main.id
@@ -83,11 +83,11 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.my_app.id
   }
 }
-```
+\`\`\`
 
 The above code will create a route table for our VPC. The `route` says that all the outbound traffic `0.0.0.0/0` will be directed to the internet via the VPC's Internet Gateway. This piece of code essentially makes our subnet using this route table _public_. Now this route table is attached to our VPC, but not to subnet. To attach it to our two subnets, we need to create an association between subnets and this route table:
 
-```hcl
+\`\`\`hcl
 # modules/network/main.tf
 
 resource "aws_route_table_association" "public" {
@@ -95,28 +95,28 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
-```
+\`\`\`
 
 Finally, we will make our route table a main one, just to leave explicit association.
 
-```hcl
+\`\`\`hcl
 # modules/network/main.tf
 
 resource "aws_main_route_table_association" "public_main" {
   vpc_id         = aws_vpc.main.id
   route_table_id = aws_route_table.public.id
 }
-```
+\`\`\`
 
 Let's expose the public subnet IDs as output:
 
-```hcl
+\`\`\`hcl
 # modules/network/outputs.tf
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnet_ids" {
   value = aws_subnet.public[*].id
 }
-```
+\`\`\`
 
 ## Provision SSL Certificate
 
@@ -130,7 +130,7 @@ Now that we have network and SSL certificate, we can start provisioning load bal
 
 First, let's create ALB resource:
 
-```hcl
+\`\`\`hcl
 # modules/alb/main.tf
 
 resource "aws_lb" "my_app" {
@@ -140,13 +140,13 @@ resource "aws_lb" "my_app" {
   security_groups    = [aws_security_group.my_alb.id]
   subnets            = var.subnets
 }
-```
+\`\`\`
 
 Load balancer will to be inserted in front of our public subnets (hence the `internal=false`), i.e, the subnets that we have just created. The `load_balancer_type=application` is the typical for most web applications. Alternatives are `network` and `gateway`.
 
 The security group for ALB needs to allow igress for 443 (SSL) and egress for everything is fine for now.
 
-```tf
+\`\`\`tf
 # modules/alb/main.tf
 
 resource "aws_security_group" "my_alb" {
@@ -167,15 +167,15 @@ resource "aws_security_group" "my_alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-```
+\`\`\`
 
 Note we are passing multiple `subnets` created in the network module above. Let's define them as variable:
 
-```hcl
+\`\`\`hcl
 # modules/alb/variables.tf
 variable "subnets" { type = list(string) }
 variable "vpc_id" { type = string }
-```
+\`\`\`
 
 ### Provision ALB Target Group and ALB Listener
 
@@ -183,7 +183,7 @@ The ALB Listener and ALB Target Group are input and output rules of ALB. We will
 
 **Begin with defining ALB Listener:**
 
-```hcl
+\`\`\`hcl
 # modules/alb/main.tf
 
 resource "aws_lb_listener" "https" {
@@ -200,13 +200,13 @@ resource "aws_lb_listener" "https" {
 
   depends_on = [var.acm_certificate_cert]
 }
-```
+\`\`\`
 
 And now, we have to define our target group: `target_group_arn`.
 
 **Defining our Target Group:**
 
-```hcl
+\`\`\`hcl
 # modules/alb/main.tf
 
 resource "aws_lb_target_group" "my_app" {
@@ -227,13 +227,13 @@ resource "aws_lb_target_group" "my_app" {
 
   depends_on = [aws_lb.my_app]
 }
-```
+\`\`\`
 
 From our load balancer we will forward requests into our cluster, which contains Ec-2 instances listening on port 80. Since we are in our subnet, it is safe to use HTTP. The `health_check` block defines which URL the ALB uses to decide if the target containers are healthy. Here we define the base URL since this is our simples python server application. You can read more information about [health checks on AWS docs](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html). `healthy_threshold` and `unhealthy_threshold` define how many (failed) healthchecks a target should be evaluated as healthy or unhealthy. These healthchecks are performed in intervals of seconds defined in interval.
 
 Let's not forget to define the additional variables in `variables.tf`:
 
-```hcl
+\`\`\`hcl
 # modules/alb/variables.tf
 variable "subnets" { type = list(string) }
 variable "vpc_id" { type = string }
@@ -244,41 +244,41 @@ variable "acm_certificate_cert" {
     id  = string
   })
 }
-```
+\`\`\`
 
 ### Attach EC-2 to the Target Group
 
 For Load Balancer to forward requests to the EC-2, we need to attach it to the target group. This is done using `aws_lb_target_group_attachment` resource:
 
-```hcl
+\`\`\`hcl
 resource "aws_lb_target_group_attachment" "ec2_attachment" {
   target_group_arn = aws_lb_target_group.my_app.arn
   target_id        = var.ec2_first_instance_id
   port             = 80
 }
-```
+\`\`\`
 
 Note port 80 is the HTTP but it is fine, since we already checked for SSL at the load balancer listener.
 
 Let's add a variable for `ec2_first_instance_id`:
 
-```hcl
+\`\`\`hcl
 # modules/alb/variables.tf
 variable "ec2_first_instance_id" { type = string }
-```
+\`\`\`
 
 Note, we have called it `ec2_first_instance_id` because we will be adding more EC-2 instances later. Let's ensure setup works with one instance first... Oh well! It is not that hard. Let's prepare out load balancer to accept array of ec2 instances already
 
 **Variables**
 
-```hcl
+\`\`\`hcl
 # modules/alb/variables.tf
 variable "ec2_instance_ids" { type = list(string) }
-```
+\`\`\`
 
 **Attachment Resource**
 
-```hcl
+\`\`\`hcl
 # modules/alb/main.tf
 resource "aws_lb_target_group_attachment" "ec2_attachment" {
   count = length(var.ec2_instance_ids)
@@ -287,7 +287,7 @@ resource "aws_lb_target_group_attachment" "ec2_attachment" {
   target_id        = var.ec2_instance_ids[count.index]
   port             = 80
 }
-```
+\`\`\`
 
 Note we are using the `count` directive to loop over all the EC-2 instance IDs passed in the variable `ec2_instance_ids`.
 
@@ -295,7 +295,7 @@ Note we are using the `count` directive to loop over all the EC-2 instance IDs p
 
 And lets expose the DNS name and zone ID of the load balancer for later use in Route53:
 
-```hcl
+\`\`\`hcl
 # modules/alb/outputs.tf
 output "dns_name" {
     value = aws_lb.my_app.dns_name
@@ -304,13 +304,13 @@ output "dns_name" {
 output "zone_id" {
     value = aws_lb.my_app.zone_id
 }
-```
+\`\`\`
 
 ## Update Route53 to Point to ALB
 
 We have HTTPS on our ALB, now we have to make DNS point to ALB.
 
-```hcl
+\`\`\`hcl
 # modules/dns/main.tf
 
 resource "aws_route53_record" "record" {
@@ -324,23 +324,23 @@ resource "aws_route53_record" "record" {
     evaluate_target_health = true
   }
 }
-```
+\`\`\`
 
 and Outputs:
 
-```hcl
+\`\`\`hcl
 # modules/dns/outputs.tf
 output "www_dns_record" {
   value       = aws_route53_record.www.fqdn
   description = "The FQDN of the www Route53 record"
 }
-```
+\`\`\`
 
 ## Update Ec-2 to use the subnets from the network module
 
 The Ec-2 instance also needs to be updated to use one of the two public subnets created in the network module:
 
-```hcl
+\`\`\`hcl
 # modules/ec2/main.tf
 resource "aws_key_pair" "ssh-key" {
   key_name   = var.ssh_key_name
@@ -389,11 +389,11 @@ resource "aws_instance" "my_app" {
               nohup python3 -m http.server 80 &
               EOF
 }
-```
+\`\`\`
 
 ## Now let's glue everything together in the Root Module
 
-```hcl
+\`\`\`hcl
 # main.tf
 
 provider "aws" {
@@ -443,7 +443,7 @@ module "aws_route53_record" {
   target_domain_name = module.alb.dns_name
   hosted_zone_id = module.alb.zone_id
 }
-```
+\`\`\`
 
 ## Creating second EC-2 instance
 
@@ -453,7 +453,7 @@ We need to alter out ec2 module so that we can create multiple instances.
 
 One of the things we have to change is the SSH key pair. Each EC-2 instance needs to have its own key pair. So we will add a variable `ssh_key_name` to the ec2 module. Same to the `security_group_name`
 
-```hcl
+\`\`\`hcl
 # modules/ec2/variables.tf
 variable "instance_ami" { type = string }
 variable "instance_type" { type = string }
@@ -462,11 +462,11 @@ variable "subnet_id" { type = string }
 variable "ssh_public_key" { type = string }
 variable "ssh_key_name" { type = string }
 variable "security_group_name" { type = string }
-```
+\`\`\`
 
 And int he `main.tf` of the ec2 module we will use this variable:
 
-```hcl
+\`\`\`hcl
 # modules/ec2/main.tf
 resource "aws_key_pair" "ssh-key" {
   key_name   = var.ssh_key_name
@@ -500,13 +500,13 @@ resource "aws_security_group" "my_app" {
 }
 
 # ... rest of the code ...
-```
+\`\`\`
 
 ### No hardcoding availability zone
 
 We will also remove hardcoding of availability zone in the ec2 module, so that we can create multiple instances in different availability zones. Since we are already passing `subnet_id` to the ec2 module, we do not need to pass availability zone separately. So we can remove it from the variables and from the ec2 instance resource.
 
-```hcl
+\`\`\`hcl
 # modules/ec2/variables.tf
 variable "instance_ami" { type = string }
 variable "instance_type" { type = string }
@@ -515,9 +515,9 @@ variable "subnet_id" { type = string }
 variable "ssh_public_key" { type = string }
 variable "ssh_key_name" { type = string }
 variable "security_group_name" { type = string }
-```
+\`\`\`
 
-```hcl
+\`\`\`hcl
 # modules/ec2/main.tf
 resource "aws_instance" "my_app" {
   ami                         = var.instance_ami
@@ -534,11 +534,11 @@ resource "aws_instance" "my_app" {
               nohup python3 -m http.server 80 &
               EOF
 }
-```
+\`\`\`
 
 To create a second EC-2 instance, we can simply duplicate the `ec2_first_instance` module call and change the subnet to the second public subnet created in the network module.
 
-```hcl
+\`\`\`hcl
 # main.tf
 
 module "ec2_first_instance" {
@@ -574,13 +574,13 @@ module "alb" {
     module.ec2_second_instance.instance_id
   ]
 }
-```
+\`\`\`
 
 ### Custom Initializing of ec-2 user data
 
 To make things a little more interesting, let's change the `user_data` of the ec-2 instances to show which instance is serving the request. We can do that by changing the `user_data` in the ec2 module to accept a variable `user_data`:
 
-```hcl
+\`\`\`hcl
 # modules/ec2/variables.tf
 variable "instance_ami" { type = string }
 variable "instance_type" { type = string }
@@ -590,7 +590,7 @@ variable "ssh_public_key" { type = string }
 variable "ssh_key_name" { type = string }
 variable "security_group_name" { type = string }
 variable "user_data" { type = string }
-```
+\`\`\`
 
 ### Setting user data in ec2 module, start docker container
 
@@ -598,7 +598,7 @@ To test our setup and load balancer work, we need to see both ec-2 instances ser
 
 First, let's update the ec2 module to use the `user_data` variable:
 
-```hcl
+\`\`\`hcl
 # modules/ec2/main.tf
 resource "aws_instance" "my_app" {
   ami                         = var.instance_ami
@@ -609,11 +609,11 @@ resource "aws_instance" "my_app" {
   key_name                    = aws_key_pair.ssh-key.key_name
   user_data                   = var.user_data
 }
-```
+\`\`\`
 
 And now, we can pass different `user_data` to each ec-2 instance module call in the root module. Let's keep the `user_data` in the first ec-2 instance as is:
 
-```hcl
+\`\`\`hcl
 module "ec2_first_instance" {
   source            = "./modules/ec2"
   instance_ami      = var.instance_ami
@@ -631,11 +631,11 @@ module "ec2_first_instance" {
               nohup python3 -m http.server 80 &
               EOF
 }
-```
+\`\`\`
 
 And now, the second ec-2 instance will have different `user_data`. Let's make it server the docker image with nginx:
 
-```hcl
+\`\`\`hcl
 module "ec2_second_instance" {
   source            = "./modules/ec2"
   instance_ami      = var.instance_ami
@@ -658,11 +658,11 @@ module "ec2_second_instance" {
               sudo docker run -d -p 80:80 nginx
               EOF
 }
-```
+\`\`\`
 
 Finally, add outputs:
 
-```hcl
+\`\`\`hcl
 # outputs.tf
 output "ec2_first_instance_ip_address" {
   value       = module.ec2_first_instance.public_ip
@@ -673,25 +673,25 @@ output "ec2_second_instance_ip_address" {
   value       = module.ec2_second_instance.public_ip
   description = "The Elastic IP address allocated to the second EC2 instance."
 }
-```
+\`\`\`
 
 ## Testing the setup
 
 Now run the following commands:
 
-```bash
+\`\`\`bash
 terraform init
 terraform apply --auto-approve
-```
+\`\`\`
 
 And observe the output:
 
-```bash
+\`\`\`bash
 Outputs:
 
 ec2_first_instance_ip_address = "34.201.164.185"
 ec2_second_instance_ip_address = "54.236.186.223"
-```
+\`\`\`
 
 Navigate to `https://www.your-domain.com` and see the magic happen!
 Double check that you have two EC-2 instances serving the requests by refreshing the page multiple times.
@@ -704,9 +704,9 @@ Double check that you have two EC-2 instances serving the requests by refreshing
 
 Remember, infra has costs. When you are done experimenting, you can destroy the infra like follows:
 
-```bash
+\`\`\`bash
 terraform destroy --auto-approve
-```
+\`\`\`
 
 ## Conclusion
 

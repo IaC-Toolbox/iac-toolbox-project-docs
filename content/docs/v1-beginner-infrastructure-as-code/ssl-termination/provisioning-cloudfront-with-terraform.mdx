@@ -19,7 +19,7 @@ First step to add an HTTPS using Cloudfront is naturally to create a Cloudfront 
 
 First thing is to define our origin endpoint. We can do it using Route53, where the origin is a URL pointing to our Ec-2 instance. Let's do it
 
-```tf
+\`\`\`tf
 # modules/dns/main.tf
 
 resource "aws_route53_zone" "main" {
@@ -33,20 +33,20 @@ resource "aws_route53_record" "origin" {
   ttl     = 300
   records = [var.origin_ip]
 }
-```
+\`\`\`
 
 Make sure to add the variables in `variables.tf`:
 
-```tf
+\`\`\`tf
 # modules/dns/variables.tf
 variable "main_zone_id" { type = string }
 variable "domain_name" { type = string }
 variable "origin_ip" { type = string }
-```
+\`\`\`
 
 And the origin_ip is going to be the public IP of our Ec-2 instance. So in the main `tf` file we need to update the module call:
 
-```tf
+\`\`\`tf
 # main.tf
 module "dns" {
   source        = "./modules/dns"
@@ -54,17 +54,17 @@ module "dns" {
   main_zone_id  = aws_route53_zone.main.zone_id
   origin_ip     = module.ec2.public_ip
 }
-```
+\`\`\`
 
 And let's make sure to output the FQDN of our origin:
 
-```tf
+\`\`\`tf
 # modules/dns/outputs.tf
 output "origin_dns_record" {
   value       = aws_route53_record.origin.fqdn
   description = "The FQDN of the origin Route53 record"
 }
-```
+\`\`\`
 
 You can test now by running `terraform apply`. Note, this `origin.your-domain.com` is going to be available on HTTP now.
 
@@ -74,7 +74,7 @@ You can test now by running `terraform apply`. Note, this `origin.your-domain.co
 
 Now that we have an origin, we can create distribution:
 
-```tf
+\`\`\`tf
 # modules/cloudfront/main.tf
 
 resource "aws_cloudfront_distribution" "cdn" {
@@ -115,30 +115,30 @@ resource "aws_cloudfront_distribution" "cdn" {
     }
   }
 }
-```
+\`\`\`
 
 Whoa! that is a lot of configs. One of the main pieces there is the `target_origin_id`. This will be pointing to our `origin.your-domain.com`. For now we will use `cloudfront_default_certificate` which is CloudFront certificate.
 
 Let's add a variable and test output:
 
-```tf
+\`\`\`tf
 # modules/cloudfront/variables.tf
 variable "aws_route53_origin_fqdn" { type = string }
-```
+\`\`\`
 
 And output:
 
-```tf
+\`\`\`tf
 # modules/cloudfront/outputs.tf
 
 output "cloudfront_distribution_domain_name" {
   value = aws_cloudfront_distribution.cdn.domain_name
 }
-```
+\`\`\`
 
 Also, if you followed through previous article on setting up the API Gateway, then make sure to remove the API Gateway related code from the `main.tf` and `variables.tf` files as we are not using it here. Additionally, ensure that you have the security group allowing HTTP from anywhere:
 
-```tf
+\`\`\`tf
 # modules/security_group/main.tf
 resource "aws_security_group" "my_app" {
   name   = "Security Group for API"
@@ -153,22 +153,22 @@ resource "aws_security_group" "my_app" {
 
 ... rest of the code ...
 }
-```
+\`\`\`
 
 Finally, update the `main.tf` file to pass the origin FQDN to CloudFront module:
 
-```tf
+\`\`\`tf
 # main.tf
 
 module "cloudfront" {
   source                     = "./modules/cloudfront"
   aws_route53_origin_fqdn    = module.dns.origin_dns_record
 }
-```
+\`\`\`
 
 Also, ensure that we have outputs for CloudFront distribution domain name:
 
-```tf
+\`\`\`tf
 # outputs.tf
 output "cloudfront_distribution_domain_name" {
   value = aws_cloudfront_distribution.cdn.domain_name
@@ -177,15 +177,15 @@ output "cloudfront_distribution_domain_name" {
 output "cloudfront_distribution_hosted_zone_id" {
   value = aws_cloudfront_distribution.cdn.hosted_zone_id
 }
-```
+\`\`\`
 
 ## Apply changes
 
 Install the new module with `terraform init` and then run `terraform apply` and observe the `cloudfront_distribution_domain_name` output. It should return something like
 
-```sh
+\`\`\`sh
 d123456789abcdef.cloudfront.net. # example URL
-```
+\`\`\`
 
 If everything went well then you should be able to open the URL in the browser. (Notice the URL in browser)
 
@@ -199,24 +199,24 @@ You can follow the previous guide on [Provisioning SSL Certificate](./provision-
 
 In the next step we are going to create a cloudfront distribution which contains an endpoint with HTTPS termination and is a place where we are going to place our SSL certificate. First we need to set a rule to wait for the certificate to be validated before creating the distribution.
 
-```tf
+\`\`\`tf
 # modules/cloudfront/main.tf
 
 resource "aws_cloudfront_distribution" "cdn" {
   depends_on = [var.acm_certificate]
 }
-```
+\`\`\`
 
 Ensure to add a variable for it:
 
-```tf
+\`\`\`tf
 # modules/cloudfront/variables.tf
 variable "acm_certificate" { type = string }
-```
+\`\`\`
 
 And bring this certificate from the `main.tf` file, from ssl module:
 
-```tf
+\`\`\`tf
 # main.tf
 
 module "ssl_acm" {
@@ -229,13 +229,13 @@ module "cloudfront_cdn" {
   aws_route53_origin_fqdn   = module.aws_route53_record.origin_dns_record
   acm_certificate           = module.ssl_acm.aws_acm_certificate_arn
 }
-```
+\`\`\`
 
 ### Use SSL Certificate in CloudFront
 
 We can now change the **Viewer certificate:** on CloudFront to use our validated ACM certificate for https://www.your-domain.com.
 
-```tf
+\`\`\`tf
 # modules/cloudfront/main.tf
 
 resource "aws_cloudfront_distribution" "cdn" {
@@ -248,13 +248,13 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
   ... other code ...
 }
-```
+\`\`\`
 
 ### Route 53 Record Pointing to CloudFront
 
 Now that Cloudfront setup is done, it is going to be available between our ec2 instance and our DNS. So now we have the Cloudfront doing SSL and sending requests to the ec2 instance. The last step is to enable our DNS Route 53 to send.
 
-```tf
+\`\`\`tf
 # modules/dns/main.tf
 resource "aws_route53_record" "origin" {
   zone_id = var.main_zone_id
@@ -274,23 +274,23 @@ resource "aws_route53_record" "www" {
     evaluate_target_health = false
   }
 }
-```
+\`\`\`
 
 And make sure to use the correct variables:
 
-```tf
+\`\`\`tf
 # modules/dns/variables.tf
 variable "main_zone_id" { type = string }
 variable "target_domain_name" { type = string }
 variable "hosted_zone_id" { type = string }
 variable "origin_ip" { type = string }
-```
+\`\`\`
 
 This sets an alias A record in Route 53 so your domain `www.your-domain.com` points to the CloudFront distribution instead of the EC2 directly.
 
 Finally, let's glue it all together in the `main.tf`:
 
-```tf
+\`\`\`tf
 # main.tf
 resource "aws_route53_zone" "main" {
   name = "your-domain.com"
@@ -314,11 +314,11 @@ module "aws_route53_record" {
   target_domain_name = module.cloudfront_cdn.cloudfront_distribution_domain_name
   hosted_zone_id = module.cloudfront_cdn.cloudfront_distribution_hosted_zone_id
 }
-```
+\`\`\`
 
 Lastly, let's not forget to expose port 443 in our VPC security group:
 
-```tf
+\`\`\`tf
 # security_group.tf
 
 resource "aws_security_group" "my-app" {
@@ -338,20 +338,20 @@ resource "aws_security_group" "my-app" {
 
   ...
 }
-```
+\`\`\`
 
 ### Output
 
 Finally, let's add some output for debugging:
 
-```tf
+\`\`\`tf
 # output.tf
 
 output "https_url" {
   value       = "https://www.your-domain.com"
   description = "Public HTTPS endpoint for the EC2 app."
 }
-```
+\`\`\`
 
 All should be working now, lets try to provision our new infrastructure. Run: `terraform apply --auto-approve`.
 
@@ -363,9 +363,9 @@ You should be able to open your app using `https://www.your-domain.com`. However
 
 Run:
 
-```sh
+\`\`\`sh
 dig www.your-domain.com +short
-```
+\`\`\`
 
 If it still returns an IP address, it means the A record is pointing directly to EC2 and not CloudFront — which won't support HTTPS directly.
 
@@ -373,9 +373,9 @@ If it still returns an IP address, it means the A record is pointing directly to
 
 Remember, infra has costs. When you are done experimenting, you can destroy the infra like follows:
 
-```bash
+\`\`\`bash
 terraform destroy --auto-approve
-```
+\`\`\`
 
 ## Conclusion
 
