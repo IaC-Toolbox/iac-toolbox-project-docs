@@ -5,19 +5,26 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "start": "next start",
-    "types:check": "fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "eslint",
     "lint:fix": "eslint --fix .",
     "prettier": "prettier --check .",
-    "prettier:fix": "prettier --write ."
+    "prettier:fix": "prettier --write .",
+    "start": "next start",
+    "types:check": "fumadocs-mdx && tsc --noEmit"
   },
   "dependencies": {
+    "@emotion/is-prop-valid": "latest",
+    "@fumadocs/mdx-remote": "latest",
+    "@mixedbread/sdk": "latest",
+    "@orama/core": "latest",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-navigation-menu": "^1.2.14",
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.3",
+    "@rrweb/types": "latest",
+    "@tanstack/react-router": "latest",
+    "algoliasearch": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fumadocs-core": "16.2.3",
@@ -31,8 +38,14 @@
     "posthog-js": "^1.267.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router": "latest",
     "react-use-measure": "^2.1.7",
-    "tailwind-merge": "^3.3.1"
+    "rrweb-snapshot": "latest",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "1.0.7",
+    "vite": "latest",
+    "waku": "latest",
+    "zod": "latest"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.1",
