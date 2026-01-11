@@ -1,20 +1,17 @@
 import { Star, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-// URLs
-const GITHUB_URL = "https://github.com/Ship-Infra/ship-infra-project"
-const DOCS_URL = "https://www.ship-infra.com/docs/v1-beginner-infrastructure-as-code"
+const GITHUB_URL = "https://github.com/IaC-Toolbox/iac-toolbox"
+const DOCS_URL = "https://www.iac-toolbox.com/docs/v1-beginner-infrastructure-as-code"
 
-// Text content
 const BADGE_TEXT = "Terraform AWS Deployment Tutorials"
-const HERO_TITLE_MAIN = "Ship Infrastructure"
-const HERO_TITLE_HIGHLIGHT = " Like a Pro"
+const HERO_TITLE_MAIN = "Your Infrastructure"
+const HERO_TITLE_HIGHLIGHT = " Toolkit"
 const HERO_DESCRIPTION =
   "Open source, step-by-step Terraform tutorials for deploying production-ready AWS infrastructure. Built for startups and developers who want to ship fast."
 const TUTORIALS_CTA_TEXT = "View Tutorials"
 const GITHUB_CTA_TEXT = "Star on GitHub"
 
-// Stats
 const STATS = [
   { value: "IaC", label: "Tutorials" },
   { value: "100%", label: "Open Source" },
@@ -26,10 +23,8 @@ export function Hero({ sectionClassnames }: { sectionClassnames: string }) {
   return (
     <section className={`relative overflow-hidden py-16 md:py-24 lg:py-32 ${sectionClassnames}`}>
       <div className="absolute inset-0 -z-10">
-        {/* Primary coral radial gradient from top */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(220,80,80,0.15),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(220,80,80,0.12),transparent)]" />
-        {/* Secondary warm accent from corner */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_80%_20%,rgba(248,113,113,0.08),transparent)] dark:bg-[radial-gradient(ellipse_50%_50%_at_80%_20%,rgba(248,113,113,0.05),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.15),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.12),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_80%_20%,rgba(167,139,250,0.08),transparent)] dark:bg-[radial-gradient(ellipse_50%_50%_at_80%_20%,rgba(167,139,250,0.05),transparent)]" />
       </div>
 
       <div className="container mx-auto px-4">

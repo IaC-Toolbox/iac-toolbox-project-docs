@@ -187,6 +187,11 @@ module "network" {
   availability_zone = var.availability_zone
 }
 
+module "security_group" {
+  source = "./modules/security_group"
+  vpc_id = module.network.vpc_id
+}
+
 module "ec2" {
   source            = "./modules/ec2"
   instance_ami      = var.instance_ami
@@ -303,31 +308,6 @@ resource "aws_instance" "app" {
               EOF
 }
 \`\`\`
-
-### Adding variables
-
-Add variables in the root module:
-
-```hcl
-# variables.tf
-
-variable "availability_zone" {
-  description = "Availability zone of resources"
-  type        = string
-}
-variable "instance_ami" {
-  description = "ID of the AMI used"
-  type        = string
-}
-variable "instance_type" {
-  description = "Type of the instance"
-  type        = string
-}
-variable "ssh_public_key" {
-  description = "Public SSH key for logging into EC2 instance"
-  type        = string
-}
-```
 
 ### Adding outputs
 

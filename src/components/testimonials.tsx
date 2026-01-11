@@ -1,8 +1,8 @@
 import { Quote } from "lucide-react"
 
-const SECTION_LABEL = "Why Ship Infra Exists"
+const SECTION_LABEL = "Why IaC Toolbox Exists"
 const SECTION_TITLE = "Built from real startup infrastructure"
-const TESTIMONIAL_TEXT = `I've worked at startups where infrastructure complexity grew faster than the company. By the time we needed to pursue SOC 2, progress slowed to a crawl — changes were risky and even small improvements took too long. Ship Infra is a cleaned-up, opinionated version of the Terraform and AWS setups I wish we had from the start.`
+const TESTIMONIAL_TEXT = `I've worked at startups where infrastructure complexity grew faster than the company. By the time we needed to pursue SOC 2, progress slowed to a crawl — changes were risky and even small improvements took too long. IaC Toolbox is a cleaned-up, opinionated version of the Terraform and AWS setups I wish we had from the start.`
 const AUTHOR_NAME = "Viktor Vasylkovskyi"
 const AUTHOR_TITLE = "Senior Software Engineer, PagerDuty"
 

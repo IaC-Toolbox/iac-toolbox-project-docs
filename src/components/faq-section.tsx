@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 
-// AEO-optimized FAQ section with direct answers
 const SECTION_TITLE = "Common Questions About AWS Infrastructure & Terraform"
 
 const faqs = [
@@ -41,7 +40,7 @@ const faqs = [
   {
     question: "How do I go from zero to production on AWS?",
     answer:
-      "Follow the Ship Infra tutorial series in order. Start with the fundamentals, deploy your first resources, then progressively add networking, databases, security, and monitoring.",
+      "Follow the IaC Toolbox tutorial series in order. Start with the fundamentals, deploy your first resources, then progressively add networking, databases, security, and monitoring.",
     detail: "By the end, you will have production-ready AWS infrastructure managed entirely with Terraform.",
   },
 ]
