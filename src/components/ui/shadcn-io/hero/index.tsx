@@ -41,7 +41,12 @@ const HeroScreen: FC<HeroScreenProps> = ({
     <div className='flex flex-col gap-16 px-8 py-24 text-center z-10 pointer-events-none'>
       <div className='flex flex-col items-center justify-center gap-8'>
         <div className='flex flex-col items-center justify-center'>
-          <Image src='/logo.png' alt='Ship Infra Project Logo' width={logoSize} height={logoSize} />
+          <Image
+            src='/logo.png'
+            alt='Infrastructure as Code Toolbox Project Logo'
+            width={logoSize}
+            height={logoSize}
+          />
         </div>
         {announcementUrl && (
           <Link href={announcementUrl}>

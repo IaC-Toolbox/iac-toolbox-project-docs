@@ -89,6 +89,15 @@ resource "aws_route53_record" "vercel_cname_iac_toolbox" {
   records = [each.value]
 }
 
+resource "aws_route53_record" "vercel_a" {
+
+  zone_id = aws_route53_zone.main_iac_toolbox.zone_id
+  name    = "@"
+  type    = "A"
+  ttl     = 300
+  records = ["216.198.79.1"]
+}
+
 ## Google Search Console Verification
 
 variable "google_search_console_verification" {

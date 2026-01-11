@@ -11,7 +11,14 @@ import { useEffect, useRef, useState } from 'react';
 const logoSize = 36;
 // Simple logo component for the navbar
 const Logo = () => {
-  return <Image src='/logo.png' alt='Ship Infra Project Logo' width={logoSize} height={logoSize} />;
+  return (
+    <Image
+      src='/logo.png'
+      alt='Infrastructure as Code Toolbox Project Logo'
+      width={logoSize}
+      height={logoSize}
+    />
+  );
 };
 
 // Hamburger icon component
@@ -140,7 +147,9 @@ export const Navbar01 = React.forwardRef<HTMLElement, Navbar01Props>(
                 onClick={(e) => e.preventDefault()}
                 className='flex items-center space-x-2 text-primary hover:text-primary/90 transition-colors cursor-pointer'
               >
-                <span className='hidden font-bold text-xl sm:inline-block'>Ship Infra Project</span>
+                <span className='hidden font-bold text-xl sm:inline-block'>
+                  Infrastructure as Code Toolbox Project
+                </span>
               </button>
 
               {/* Navigation menu */}

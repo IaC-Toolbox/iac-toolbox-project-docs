@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...
     <DefaultImage
       title={page.data.title}
       description={page.data.description}
-      site='Ship Infra Project'
+      site='Infrastructure as Code Toolbox Project'
     />,
     {
       width: 1200,

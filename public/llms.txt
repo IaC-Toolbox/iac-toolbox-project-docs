@@ -1,7 +1,7 @@
-# Ship Infra
+# Infrastructure as Code Toolbox
 
 ## About
-Ship Infra is an open source project with 8 comprehensive tutorials for deploying modern applications on AWS.
+Infrastructure as Code Toolbox is an open source project with 8 comprehensive tutorials for deploying modern applications on AWS.
 
 ## Tutorials
 1. Getting Started with AWS

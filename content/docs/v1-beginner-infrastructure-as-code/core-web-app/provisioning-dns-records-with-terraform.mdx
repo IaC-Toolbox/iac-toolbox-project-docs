@@ -10,15 +10,15 @@ All is fine and dandy until now, but when we want to run a real application, we 
 
 When adding DNS, we will be able to access our application not via IP address like
 
-\`\`\`bash
+```bash
 http://52.206.93.210/
-\`\`\`
+```
 
 but via actual domain that you own like
 
-\`\`\`bash
+```bash
 http://www.your-domain.com
-\`\`\`
+```
 
 Let's dive in!
 
@@ -30,7 +30,7 @@ This guide full code is available in https://github.com/Ship-Infra/ship-infra-pr
 
 in your `ec2.tf` add the following:
 
-\`\`\`tf
+```tf
 resource "aws_instance" "app" {
   ... your instance previous code ...
   user_data = <<-EOF
@@ -41,16 +41,16 @@ resource "aws_instance" "app" {
               nohup python3 -m http.server 80 &
               EOF
 }
-\`\`\`
+```
 
 In `outputs.tf` ensure you have the following:
 
-\`\`\`tf
+```tf
 output "ec2_ip_address" {
   value       = aws_eip.my_app.public_ip
   description = "The Elastic IP address allocated to the EC2 instance."
 }
-\`\`\`
+```
 
 The `user_data` is a cool utility in aws that allows us to bake in ec2 some bootstrap code. In this example we start a server using python that is a simple `<html><body><h1>Hello from Terraform EC2!</h1></body></html>` static page.
 
@@ -58,7 +58,7 @@ The `user_data` is a cool utility in aws that allows us to bake in ec2 some boot
 
 In `security-groups.tf` ensure that you have the following rule to allow HTTP access:
 
-\`\`\`tf
+```tf
 resource "aws_security_group" "my_app" {
   vpc_id = aws_vpc.main.id
   # ... other rules ...
@@ -72,7 +72,7 @@ resource "aws_security_group" "my_app" {
   }
   # ... other rules ...
 }
-\`\`\`
+```
 
 ### Testing the setup
 
@@ -80,9 +80,9 @@ Run `terraform apply --auto-approve`.
 
 See the output:
 
-\`\`\`bash
+```bash
 ec2_ip_address = "3.214.79.152" # example output
-\`\`\`
+```
 
 Navigate to `ec2_ip_address` and see website opening
 
@@ -102,12 +102,12 @@ Run `terraform apply --auto-approve` and navigate to [Route 53 Hosted Zones](htt
 
 Lets begin our `route53.tf`
 
-\`\`\`tf
+```tf
 # route53.tf
 resource "aws_route53_zone" "main" {
   name = "your-domain.com"
 }
-\`\`\`
+```
 
 ### Updating DNS Registrar
 
@@ -137,7 +137,7 @@ Therefore, it is a crucial step to update the `NS` records in your DNS registrar
 
 Once this is done we can proceed and add new DNS record using terraform:
 
-\`\`\`tf
+```tf
 # route53.tf
 resource "aws_route53_zone" "main" {
   name = "your-domain.com"
@@ -150,15 +150,15 @@ resource "aws_route53_record" "www" {
   ttl     = 60
   records = [aws_eip.my_app.public_ip]
 }
-\`\`\`
+```
 
 Above we are creating a DNS record of type `A` which is a type that assigns DNS name to Ipv4 IP address. Note that in this example we are using `EIP` which are fixed IP, to avoid the issues with dynamic IP addresses. This way we make sure that even if the EC2 instance is restarted, and receives new private IP, we still keep same fixed public IP. Lets apply and test `terraform apply --auto-approve`.
 
 **Note**, check if the name servers got applied. Sometimes it takes a while for your changes to take effect. You can check by running:
 
-\`\`\`bash
+```bash
 dig +short NS your-domain.com
-\`\`\`
+```
 
 In the output, you should see the name servers that you have added in your DNS registrar. If they are not correct, wait a bit longer, you should receive the following error in browser `DNS_PROBE_FINISHED_NXDOMAIN` which indicates that the DNS records are not yet propagated.
 
@@ -168,9 +168,9 @@ Once they are correct, your DNS should be applied. Visit `http://www.your-domain
 
 Remember, infra has costs. When you are done experimenting, you can destroy the infra like follows:
 
-\`\`\`bash
+```bash
 terraform destroy --auto-approve
-\`\`\`
+```
 
 ## Conclusion
 

@@ -1,5 +1,5 @@
 ---
-title: Ship Infrastructure - A Hands-On Terraform Journey Through AWS
+title: Infrastructure as Code Toolbox - A Hands-On Terraform Journey Through AWS
 ---
 
 Infrastructure as Code is now a core skill for modern software engineers. Whether you're deploying a simple service or scaling a production system, you need infrastructure that is consistent, repeatable, and version-controlled. Terraform makes that possible.
@@ -18,12 +18,12 @@ In this guide, we'll build a simple yet complete web application infrastructure 
 
 At the end of this guide, you will have Terraform code that provisions the following outputs:
 
-\`\`\`sh
+```sh
 domain_for_your_apps=
 ip_address_of_your_ec2_instance_one=
 ip_address_of_your_ec2_instance_two=
 database_endpoint=
-\`\`\`
+```
 
 The above outputs represent a fully functional web application infrastructure on AWS, all provisioned with Terraform. Specifically, you will learn how to:
 
@@ -42,7 +42,7 @@ Let's start from the basics and grow toward production: one file at a time.
 
 We are providing bare bones infrastructure for typical 3 layer application. This is not a tutorial on how to build secure, scalable, production ready infra. There are many more aspects to consider like monitoring, logging, autoscaling, backups, disaster recovery and so on. The goal here is to get you familiar with the core concepts of AWS and Terraform so you can build upon them.
 
-## 🧠 Ship Infra Demo — Running a Local SLM
+## 🧠 IaC Toolbox Demo — Running a Local SLM
 
 To demonstrate what this infrastructure setup can handle in practice, I built a small demo that runs a quantized Small Language Model (SLM) entirely on modest infrastructure - no GPUs and no managed AI services.
 

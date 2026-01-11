@@ -1,4 +1,4 @@
-# Ship Infra — Terraform AWS Tutorial & Learning Guide 🚀
+# Infrastructure as Code Toolbox — Terraform AWS Tutorial & Learning Guide 🚀
 
 **Terraform + AWS from zero to running backend infra — step-by-step, beginner friendly.**
 Clone the tutorial, follow the guide, and by the end you’ll have a working AWS backend (VPC, infra scaffolding) — no Terraform or AWS prior knowledge required.
@@ -8,7 +8,7 @@ Clone the tutorial, follow the guide, and by the end you’ll have a working AWS
 ## 🧭 What is this
 
 Many developers and small teams struggle with the steep learning curve of Terraform + AWS.
-Ship Infra is a **free, open-source learning guide** that walks you through:
+Infrastructure as Code Toolbox is a **free, open-source learning guide** that walks you through:
 
 - Setting up AWS credentials & basics
 - Writing Terraform for AWS infra (networking, services)
@@ -35,11 +35,11 @@ Ship Infra is a **free, open-source learning guide** that walks you through:
 
 ## 🚀 Get started: quick path
 
-\`\`\`
+```
 git clone https://github.com/Ship-Infra/ship-infra-project.git
 cd ship-infra-project
 # Open the docs at https://ship-infra-project.viktorvasylkovskyi.com
-\`\`\`
+```
 
 Then follow the tutorials step-by-step.
 
