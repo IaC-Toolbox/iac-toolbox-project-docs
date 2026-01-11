@@ -16,7 +16,7 @@ This guide full code is available in https://github.com/Ship-Infra/ship-infra-pr
 
 let's create an ACM resource. We will do that in new module: `modules/acm`
 
-```tf
+\`\`\`tf
 # modules/acm/main.tf
 provider "aws" {
   alias  = "us_east_1"
@@ -34,7 +34,7 @@ resource "aws_acm_certificate" "cert" {
     create_before_destroy = true
   }
 }
-```
+\`\`\`
 
 Note, that ACM certificates for API Gateway must be created in `us-east-1` region, regardless of where your API Gateway is located. Hence, we define a separate AWS provider with alias `us_east_1` to handle this.
 
@@ -44,7 +44,7 @@ The code above requests an SSL/TLS certificate from AWS Certificate Manager for 
 
 Next, we need to create the required DNS record to prove domain ownership to ACM.
 
-```tf
+\`\`\`tf
 # modules/acm/main.tf
 resource "aws_route53_record" "cert_validation" {
   for_each = {
@@ -60,11 +60,11 @@ resource "aws_route53_record" "cert_validation" {
   records = [each.value.value]
   ttl     = 60
 }
-```
+\`\`\`
 
 In the code above, the `for_each` turns the set into a map indexed by `domain_name` (which is unique). We are dynamically generating multiple DNS records (1 per domain to validate) using `for_each`. `aws_acm_certificate.cert.domain_validation_options` is a list of instructions from AWS on how to validate your domain. We loop over each `dvo` (domain validation option), and create a map like:
 
-```tf
+\`\`\`tf
 {
   "www.your-domain.com" = {
     name  = "_xyz.www.your-domain.com."
@@ -72,21 +72,21 @@ In the code above, the `for_each` turns the set into a map indexed by `domain_na
     value = "_abc.acm-validations.aws."
   }
 }
-```
+\`\`\`
 
 This is how AWS verifies domain ownership: you create a DNS record with those values. The
 
-```tf
+\`\`\`tf
   records = [each.value.value]
   ttl     = 60
-```
+\`\`\`
 
 - `records`: The actual value to put in the DNS record (like \_abc.acm-validations.aws.)
 - `ttl`: Time-to-live (how long DNS resolvers cache it), set to 60 seconds for fast propagation.
 
 Next, we are adding a resource that tells AWS to wait for validation to complete before proceeding. It depends on the DNS record being correct.
 
-```tf
+\`\`\`tf
 # modules/acm/main.tf
 resource "aws_acm_certificate_validation" "cert" {
   provider        = aws.us_east_1
@@ -95,11 +95,11 @@ resource "aws_acm_certificate_validation" "cert" {
     for record in aws_route53_record.cert_validation : record.fqdn
   ]
 }
-```
+\`\`\`
 
 Let's also output the certificate ARN for later use:
 
-```tf
+\`\`\`tf
 # modules/acm/outputs.tf
 output "aws_acm_certificate_arn" {
   value = aws_acm_certificate.cert.arn
@@ -108,32 +108,32 @@ output "aws_acm_certificate_arn" {
 output "aws_acm_certificate_cert" {
   value = aws_acm_certificate.cert
 }
-```
+\`\`\`
 
 Add this module to your main terraform file:
 
-```tf
+\`\`\`tf
 # main.tf
 module "ssl_acm" {
   source              = "./modules/acm"
   aws_route53_zone_id = aws_route53_zone.main.zone_id
 }
-```
+\`\`\`
 
 And now we have ACM certificate ready to be used in API Gateway. Let's ensure everything is correct by running:
 
-```sh
+\`\`\`sh
 terraform init
 terraform apply --auto-approve
-```
+\`\`\`
 
 ## Destroying Infra
 
 Remember, infra has costs. When you are done experimenting, you can destroy the infra like follows:
 
-```bash
+\`\`\`bash
 terraform destroy --auto-approve
-```
+\`\`\`
 
 ## Next Steps
 
