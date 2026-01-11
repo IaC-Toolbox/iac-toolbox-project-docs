@@ -2,9 +2,9 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SettingsProvider } from '@/contexts/settingsContext';
 import type { Metadata, Viewport } from 'next';
-import type { LayoutProps } from '@/types'; // Declare LayoutProps here
 import localFont from 'next/font/local';
 import { PostHogProvider } from './posthog-provider';
+import type { ReactNode } from 'react';
 
 const montserratFont = localFont({
   src: [
@@ -76,7 +76,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function Layout({ children }: LayoutProps<'/'>) {
+export default function Layout({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute='class' defaultTheme='system' enableSystem disableTransitionOnChange>
       <SettingsProvider>

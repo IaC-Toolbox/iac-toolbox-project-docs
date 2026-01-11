@@ -35,11 +35,11 @@ Ship Infra is a **free, open-source learning guide** that walks you through:
 
 ## 🚀 Get started: quick path
 
-\`\`\`
+```
 git clone https://github.com/Ship-Infra/ship-infra-project.git
 cd ship-infra-project
 # Open the docs at https://ship-infra-project.viktorvasylkovskyi.com
-\`\`\`
+```
 
 Then follow the tutorials step-by-step.
 
