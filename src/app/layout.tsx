@@ -1,82 +1,95 @@
-import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { SettingsProvider } from "@/contexts/settingsContext"
-import type { Metadata, Viewport } from "next"
-import type { LayoutProps } from "@/types" // Declare LayoutProps here
-import localFont from "next/font/local"
-import { PostHogProvider } from "./posthog-provider"
+import './globals.css';
+import { ThemeProvider } from '@/components/theme-provider';
+import { SettingsProvider } from '@/contexts/settingsContext';
+import type { Metadata, Viewport } from 'next';
+import type { LayoutProps } from '@/types'; // Declare LayoutProps here
+import localFont from 'next/font/local';
+import { PostHogProvider } from './posthog-provider';
 
 const montserratFont = localFont({
   src: [
     {
-      path: "./fonts/Montserrat-Regular.woff2",
-      weight: "400",
-      style: "normal",
+      path: './fonts/Montserrat-Regular.woff2',
+      weight: '400',
+      style: 'normal',
     },
     {
-      path: "./fonts/Montserrat-Black.woff2",
-      weight: "600",
-      style: "normal",
+      path: './fonts/Montserrat-Black.woff2',
+      weight: '600',
+      style: 'normal',
     },
   ],
-})
+});
 
 export const metadata: Metadata = {
-  title: "IaC Toolbox - Infrastructure as Code Tutorials for AWS & Terraform",
+  title: 'IaC Toolbox - Infrastructure as Code Tutorials for AWS & Terraform',
   description:
-    "Learn to deploy production-ready AWS infrastructure with Terraform. Free, open source tutorials for modern developers.",
-  generator: "Next.js",
-  keywords: ["Infrastructure as Code", "IaC", "Terraform", "AWS", "deployment", "DevOps", "open source", "tutorials"],
-  authors: [{ name: "Viktor Vasylkovskyi" }],
+    'Learn to deploy production-ready AWS infrastructure with Terraform. Free, open source tutorials for modern developers.',
+  generator: 'Next.js',
+  keywords: [
+    'Infrastructure as Code',
+    'IaC',
+    'Terraform',
+    'AWS',
+    'deployment',
+    'DevOps',
+    'open source',
+    'tutorials',
+  ],
+  authors: [{ name: 'Viktor Vasylkovskyi' }],
   openGraph: {
-    images: ["/opengraph-image.png"],
-    type: "website",
-    url: "https://iac-toolbox.com/",
-    title: "IaC Toolbox - Infrastructure as Code Tutorials",
+    images: ['/opengraph-image.png'],
+    type: 'website',
+    url: 'https://iac-toolbox.com/',
+    title: 'IaC Toolbox - Infrastructure as Code Tutorials',
     description:
-      "Learn to deploy production-ready AWS infrastructure with Terraform. Free, open source tutorials for modern developers.",
-    siteName: "IaC Toolbox",
+      'Learn to deploy production-ready AWS infrastructure with Terraform. Free, open source tutorials for modern developers.',
+    siteName: 'IaC Toolbox',
   },
   twitter: {
-    card: "summary_large_image",
-    title: "IaC Toolbox - Infrastructure as Code Tutorials",
-    description: "Learn to deploy production-ready AWS infrastructure with Terraform.",
+    card: 'summary_large_image',
+    title: 'IaC Toolbox - Infrastructure as Code Tutorials',
+    description: 'Learn to deploy production-ready AWS infrastructure with Terraform.',
   },
   icons: {
     icon: [
       {
-        url: "/logo.png",
-        media: "(prefers-color-scheme: light)",
+        url: '/logo.png',
+        media: '(prefers-color-scheme: light)',
       },
       {
-        url: "/logo-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
+        url: '/logo-dark-32x32.png',
+        media: '(prefers-color-scheme: dark)',
       },
       {
-        url: "/logo.svg",
-        type: "image",
+        url: '/logo.svg',
+        type: 'image',
       },
     ],
-    apple: "/logo.png",
+    apple: '/logo.png',
   },
-}
+};
 
 export const viewport: Viewport = {
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-}
+};
 
-export default function Layout({ children }: LayoutProps<"/">) {
+export default function Layout({ children }: LayoutProps<'/'>) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute='class' defaultTheme='system' enableSystem disableTransitionOnChange>
       <SettingsProvider>
-        <html lang="en" className={`${montserratFont.className} bg-background`} suppressHydrationWarning>
-          <body className="flex flex-col min-h-screen">
+        <html
+          lang='en'
+          className={`${montserratFont.className} bg-background`}
+          suppressHydrationWarning
+        >
+          <body className='flex flex-col min-h-screen'>
             <PostHogProvider>{children}</PostHogProvider>
           </body>
         </html>
       </SettingsProvider>
     </ThemeProvider>
-  )
+  );
 }

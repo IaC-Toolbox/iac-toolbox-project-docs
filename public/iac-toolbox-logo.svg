@@ -1,0 +1,13 @@
+<svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Reduced viewBox to 56x56 to make logo appear larger, removed code bracket arrows -->
+  <!-- Background hexagon - representing infrastructure/tech -->
+  <path d="M28 4L50 16V40L28 52L6 40V16L28 4Z" fill="lab(37.3309% 51.6847 -87.4412)" />
+
+  <!-- Inner hexagon glow -->
+  <path d="M28 9L44 18V38L28 47L12 38V18L28 9Z" fill="rgba(255, 255, 255, 0.1)" />
+
+  <!-- Stack layers - representing infrastructure layers -->
+  <rect x="16" y="20" width="24" height="4" rx="1" fill="#FFFFFF" />
+  <rect x="18" y="27" width="20" height="4" rx="1" fill="rgba(255, 255, 255, 0.8)" />
+  <rect x="20" y="34" width="16" height="4" rx="1" fill="rgba(255, 255, 255, 0.6)" />
+</svg>
