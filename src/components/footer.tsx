@@ -1,7 +1,7 @@
 import { Star } from 'lucide-react';
 import { IaCToolboxLogo } from '@/components/iac-toolbox-logo';
 
-const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox';
+const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox-project';
 
 const BRAND_NAME = 'IaC Toolbox';
 const STAR_TEXT = 'Star on GitHub';

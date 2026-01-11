@@ -8,7 +8,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 
 // URLs
-const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox';
+const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox-project';
 const DOCS_URL = 'https://www.iac-toolbox.com/docs/v1-beginner-infrastructure-as-code';
 
 // Text content

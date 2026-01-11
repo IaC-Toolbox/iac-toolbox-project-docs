@@ -1,7 +1,7 @@
 import { Star, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox';
+const GITHUB_URL = 'https://github.com/IaC-Toolbox/iac-toolbox-project';
 const DOCS_URL = 'https://www.iac-toolbox.com/docs/v1-beginner-infrastructure-as-code';
 
 const BADGE_TEXT = 'Terraform AWS Deployment Tutorials';
