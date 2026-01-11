@@ -54,19 +54,19 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/logo.png',
+        url: '/iac-toolbox-logo.png',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/logo-dark-32x32.png',
+        url: '/iac-toolbox-logo-dark-32x32.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/logo.svg',
+        url: '/iac-toolbox-logo.svg',
         type: 'image',
       },
     ],
-    apple: '/logo.png',
+    apple: '/iac-toolbox-logo.png',
   },
 };
 
