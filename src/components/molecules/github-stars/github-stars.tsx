@@ -4,7 +4,7 @@ export const GithubStars = () => {
   return (
     <div className='flex gap-4'>
       {/* Compact formatting for large numbers */}
-      <GitHubStarsButton username='vvasylkovskyi' repo='ship-infra-project' formatted={true} />
+      <GitHubStarsButton username='vvasylkovskyi' repo='iac-toolbox-project' formatted={true} />
     </div>
   );
 };

@@ -36,9 +36,9 @@ Infrastructure as Code Toolbox is a **free, open-source learning guide** that wa
 ## 🚀 Get started: quick path
 
 ```
-git clone https://github.com/Ship-Infra/ship-infra-project.git
-cd ship-infra-project
-# Open the docs at https://ship-infra-project.viktorvasylkovskyi.com
+git clone https://github.com/IaC-Toolbox/iac-toolbox-project.git
+cd iac-toolbox-project
+# Open the docs at https://iac-toolbox-project.viktorvasylkovskyi.com
 ```
 
 Then follow the tutorials step-by-step.
@@ -63,15 +63,15 @@ If that interests you, feel free to ⭐ this repo or [link to your site] for upd
 
 ## 📖 Contents
 
-- [Tutorial Introduction - A Hands-on Terraform Journey Through AWS](https://ship-infra-project.viktorvasylkovskyi.com/docs)
-- [Tutorial 1 — Deploying EC2 instance on AWS with Terraform](https://ship-infra-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-ec2-on-aws-with-terraform)
-- [Tutorial 2 — Provision DNS records with Terraform](https://ship-infra-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-dns-records-with-terraform)
-- [Tutorial 3 — Provisioning EC2 Instances with Terraform Modules – Best Practices Guide](https://ship-infra-project.viktorvasylkovskyi.com/docs/terraform-best-practices/terraform-modularizing)
-- [Tutorial 4 — Provisioning SSL Certificate](https://ship-infra-project.viktorvasylkovskyi.com/docs/ssl-termination/provision-ssl-certificate)
-- [Tutorial 5 — Provisioning API Gateway and connecting it to Ec-2 instance using Terraform](https://ship-infra-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-api-gateway-as-ssl-termination-and-ec2)
-- [Tutorial 6 — Provisioning Application Load Balancer and connecting it to Ec-2 instance using Terraform](https://ship-infra-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-alb-as-ssl-termination-and-ec2)
-- [Tutorial 8 — Provision AWS Secret Manager Retrieval of Secrets](https://ship-infra-project.viktorvasylkovskyi.com/docs/database-rds/rds-setup)
-- [Tutorial wrap — Final Thoughts, and Load Test](https://ship-infra-project.viktorvasylkovskyi.com/docs/conclusion)
+- [Tutorial Introduction - A Hands-on Terraform Journey Through AWS](https://iac-toolbox-project.viktorvasylkovskyi.com/docs)
+- [Tutorial 1 — Deploying EC2 instance on AWS with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-ec2-on-aws-with-terraform)
+- [Tutorial 2 — Provision DNS records with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-dns-records-with-terraform)
+- [Tutorial 3 — Provisioning EC2 Instances with Terraform Modules – Best Practices Guide](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/terraform-best-practices/terraform-modularizing)
+- [Tutorial 4 — Provisioning SSL Certificate](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provision-ssl-certificate)
+- [Tutorial 5 — Provisioning API Gateway and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-api-gateway-as-ssl-termination-and-ec2)
+- [Tutorial 6 — Provisioning Application Load Balancer and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-alb-as-ssl-termination-and-ec2)
+- [Tutorial 8 — Provision AWS Secret Manager Retrieval of Secrets](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/database-rds/rds-setup)
+- [Tutorial wrap — Final Thoughts, and Load Test](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/conclusion)
 
 ---
 

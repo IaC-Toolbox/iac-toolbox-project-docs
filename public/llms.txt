@@ -14,5 +14,5 @@ Infrastructure as Code Toolbox is an open source project with 8 comprehensive tu
 8. Infrastructure as Code
 
 ## Links
-- Documentation: https://www.ship-infra.com/docs/v1-beginner-infrastructure-as-code
-- GitHub: https://github.com/Ship-Infra/ship-infra-project
+- Documentation: https://www.iac-toolbox.com/docs/v1-beginner-infrastructure-as-code
+- GitHub: https://github.com/IaC-Toolbox/iac-toolbox-project

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ship-infra.com/sitemap.xml
+Sitemap: https://iac-toolbox.com/sitemap.xml

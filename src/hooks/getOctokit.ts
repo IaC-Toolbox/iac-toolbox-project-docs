@@ -2,8 +2,8 @@ import type { Octokit } from 'octokit';
 import { App } from 'octokit';
 import type { ActionResponse, Feedback } from '@/components/feedback';
 
-export const repo = 'ship-infra-project';
-export const owner = 'Ship-Infra';
+export const repo = 'iac-toolbox-project';
+export const owner = 'IaC-Toolbox';
 export const DocsCategory = 'General';
 
 let instance: Octokit | undefined;
