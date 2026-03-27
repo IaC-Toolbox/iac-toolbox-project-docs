@@ -18,6 +18,10 @@ export default function Layout({ children }: LayoutProps<'/docs'>) {
               url: '/docs/v1-beginner-infrastructure-as-code/',
             },
             {
+              title: 'Private On-Premises Infrastructure',
+              url: '/docs/v0-private-on-premises-infrastructure/',
+            },
+            {
               title: 'A Journey to Production-Ready App',
               url: '/docs/v2-production-ready-infrastructure-as-code/',
             },

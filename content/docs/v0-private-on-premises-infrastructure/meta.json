@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "index",
+    "hardware-requirements",
+    "os-setup",
+    "ansible-configuration",
+    "secrets-management",
+    "github-runner",
+    "cloudflare-tunnel",
+    "ci-cd",
+    "conclusion"
+  ]
+}
