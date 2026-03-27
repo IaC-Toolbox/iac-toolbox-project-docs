@@ -63,15 +63,15 @@ If that interests you, feel free to ⭐ this repo or [link to your site] for upd
 
 ## 📖 Contents
 
-- [Tutorial Introduction - A Hands-on Terraform Journey Through AWS](https://iac-toolbox-project.viktorvasylkovskyi.com/docs)
-- [Tutorial 1 — Deploying EC2 instance on AWS with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-ec2-on-aws-with-terraform)
-- [Tutorial 2 — Provision DNS records with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/core-web-app/provisioning-dns-records-with-terraform)
-- [Tutorial 3 — Provisioning EC2 Instances with Terraform Modules – Best Practices Guide](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/terraform-best-practices/terraform-modularizing)
-- [Tutorial 4 — Provisioning SSL Certificate](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provision-ssl-certificate)
-- [Tutorial 5 — Provisioning API Gateway and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-api-gateway-as-ssl-termination-and-ec2)
-- [Tutorial 6 — Provisioning Application Load Balancer and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/ssl-termination/provisioning-alb-as-ssl-termination-and-ec2)
-- [Tutorial 8 — Provision AWS Secret Manager Retrieval of Secrets](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/database-rds/rds-setup)
-- [Tutorial wrap — Final Thoughts, and Load Test](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/conclusion)
+- [Tutorial Introduction - A Hands-on Terraform Journey Through AWS](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code)
+- [Tutorial 1 — Deploying EC2 instance on AWS with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/core-web-app/provisioning-ec2-on-aws-with-terraform)
+- [Tutorial 2 — Provision DNS records with Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/core-web-app/provisioning-dns-records-with-terraform)
+- [Tutorial 3 — Provisioning EC2 Instances with Terraform Modules – Best Practices Guide](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/terraform-best-practices/terraform-modularizing)
+- [Tutorial 4 — Provisioning SSL Certificate](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/ssl-termination/provision-ssl-certificate)
+- [Tutorial 5 — Provisioning API Gateway and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/ssl-termination/provisioning-api-gateway-as-ssl-termination-and-ec2)
+- [Tutorial 6 — Provisioning Application Load Balancer and connecting it to Ec-2 instance using Terraform](https://iac-toolbox-project.viktorvasylkovskyi.com/docs//v1-beginner-infrastructure-as-codessl-termination/provisioning-alb-as-ssl-termination-and-ec2)
+- [Tutorial 8 — Provision AWS Secret Manager Retrieval of Secrets](https://iac-toolbox-project.viktorvasylkovskyi.com/docs//v1-beginner-infrastructure-as-codedatabase-rds/rds-setup)
+- [Tutorial wrap — Final Thoughts, and Load Test](https://iac-toolbox-project.viktorvasylkovskyi.com/docs/v1-beginner-infrastructure-as-code/conclusion)
 
 ---
 
