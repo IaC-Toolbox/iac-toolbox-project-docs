@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "grafana-setup",
+    "prometheus-metrics-setup",
+    "grafana-alerts",
+    "logs-with-loki",
+    "grafana-pagerduty"
+  ]
+}
