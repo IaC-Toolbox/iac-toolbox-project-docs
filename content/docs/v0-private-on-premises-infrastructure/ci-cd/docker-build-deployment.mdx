@@ -4,67 +4,19 @@ title: Continuous Deployment with Docker
 
 With your Raspberry Pi configured as a GitHub Actions runner, you can now build ARM64 Docker images natively and deploy them automatically on every push. This creates a complete CI/CD pipeline running entirely on your own hardware. Let's dive in!
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│           COMPLETE CI/CD PIPELINE FLOW                       │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    Push["git push origin main"] --> GH["GitHub Repo"]
+    GH -->|triggers workflow| WF[".github/workflows/deploy.yml"]
+    WF -->|dispatches to runner| Pi
 
-  1. Developer Push
-       │
-       │ git push origin main
-       ▼
-  ┌────────────────────┐
-  │   GitHub Repo      │
-  │   • Code changes   │
-  │   • Dockerfile     │
-  │   • Workflow       │
-  └─────────┬──────────┘
-            │
-            │ Triggers workflow
-            ▼
-  ┌────────────────────────────────────────────────┐
-  │  GitHub Actions (.github/workflows/deploy.yml) │
-  └─────────┬──────────────────────────────────────┘
-            │
-            │ Job dispatched to self-hosted runner
-            ▼
-  ┌─────────────────────────────────────────────┐
-  │      Raspberry Pi (Self-Hosted Runner)      │
-  │                                             │
-  │  Step 1: Build                              │
-  │  ┌────────────────────────────────────┐    │
-  │  │ docker build -t myapp:$SHA .       │    │
-  │  │ • Native ARM64 build               │    │
-  │  │ • No emulation needed              │    │
-  │  └──────────────┬─────────────────────┘    │
-  │                 │                           │
-  │                 ▼                           │
-  │  Step 2: Push to Registry                  │
-  │  ┌────────────────────────────────────┐    │
-  │  │ docker push myapp:$SHA             │────┼──► Docker Hub
-  │  │ docker push myapp:latest           │    │    (or GHCR)
-  │  └──────────────┬─────────────────────┘    │
-  │                 │                           │
-  │                 ▼                           │
-  │  Step 3: Deploy                            │
-  │  ┌────────────────────────────────────┐    │
-  │  │ docker stop myapp                  │    │
-  │  │ docker pull myapp:$SHA             │    │
-  │  │ docker run -d -p 4000:4000 myapp   │    │
-  │  └──────────────┬─────────────────────┘    │
-  │                 │                           │
-  │                 ▼                           │
-  │  ┌────────────────────────────────────┐    │
-  │  │   App Running on Pi! ✅            │    │
-  │  │   http://localhost:4000            │    │
-  │  └────────────────────────────────────┘    │
-  └─────────────────────────────────────────────┘
-                    │
-                    │ Exposed via Cloudflare Tunnel
-                    ▼
-               🌍 https://api.yourdomain.com
+    subgraph Pi["Raspberry Pi (ARM64 Runner)"]
+        Build["docker build -t myapp:SHA ."] --> Reg["docker push myapp:SHA"]
+        Reg --> Deploy["docker stop + pull + run"]
+    end
 
-  From commit to production in minutes!
+    Reg -->|image| DH["Docker Hub"]
+    Deploy --> Running["✅ App running :4000"]
 ```
 
 ## Github Repository

@@ -4,38 +4,25 @@ title: Configuring Raspberry Pi with Ansible
 
 Manually installing software on servers is time-consuming, error-prone, and frankly, boring. Ansible changes all that by letting you define your setup in code and reapply it with ease. In this guide, we'll use Ansible to automate the installation of essential software on your Raspberry Pi. Let's dive in!
 
-```
-┌────────────────────────────────────────────────────────────┐
-│              ANSIBLE AUTOMATION WORKFLOW                   │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    CLI["iac-toolbox init"] -->|generates| Config["iac-toolbox.yml<br/>+ credentials"]
+    CLI -->|runs| Script["install.sh"]
+    Script -->|invokes| AP["ansible-playbook main.yml"]
 
-┌──────────────────┐                  ┌─────────────────────┐
-│   Your Mac/PC    │                  │   Raspberry Pi      │
-│  (Control Node)  │                  │  (Managed Node)     │
-│                  │                  │                     │
-│  ┌────────────┐  │                  │                     │
-│  │  Ansible   │  │                  │                     │
-│  │ Playbooks  │  │  SSH Connection  │                     │
-│  └─────┬──────┘  │ ───────────────► │                     │
-│        │         │                  │                     │
-│        ├─ Setup  │                  │  ┌──────────────┐   │
-│        │  Role   │ ──────────────── ┼─►│ Python, Git  │   │
-│        │         │   Installs base  │  │ curl, vim    │   │
-│        │         │   packages       │  └──────────────┘   │
-│        │         │                  │                     │
-│        ├─ Docker │                  │  ┌──────────────┐   │
-│        │  Role   │ ──────────────── ┼─►│ Docker CE    │   │
-│        │         │   Installs       │  │ containerd   │   │
-│        │         │   Docker         │  └──────────────┘   │
-│        │         │                  │                     │
-│        └─ Secrets│                  │  ┌──────────────┐   │
-│           Role   │ ──────────────── ┼─►│ Vault secrets│   │
-│                  │   Configures     │  │ /etc/*.env   │   │
-│                  │   secrets        │  └──────────────┘   │
-└──────────────────┘                  └─────────────────────┘
+    subgraph Playbook["Ansible Playbook (runs on Pi)"]
+        Docker["Role: docker"]
+        Vault["Role: vault"]
+        CF["Role: cloudflare"]
+        Runner["Role: github-runner"]
+        Grafana["Role: grafana"]
+    end
 
-         Run once, configure forever!
-    ansible-playbook -i inventory playbook.yml
+    AP --> Docker
+    AP --> Vault
+    AP --> CF
+    AP --> Runner
+    AP --> Grafana
 ```
 
 ## Github Repository

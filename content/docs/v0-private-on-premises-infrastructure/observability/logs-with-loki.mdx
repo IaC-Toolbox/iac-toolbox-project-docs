@@ -6,6 +6,15 @@ You've got metrics, but what happens when something breaks? Metrics tell you CPU
 
 Think of it this way: Prometheus stores metrics (numbers over time), Loki stores logs (text over time). Both query similarly, both visualize in Grafana.
 
+```mermaid
+graph LR
+    Sys["System Journals<br/>/var/log"] --> Alloy["Grafana Alloy :12345"]
+    Docker["Docker container logs"] --> Alloy
+    Alloy -->|push| Loki["Loki :3100"]
+    Loki -->|stores| Chunks["Compressed log chunks"]
+    GF["Grafana :3000"] -->|LogQL queries| Loki
+```
+
 **What this tutorial covers:**
 - Automated Loki + Alloy deployment using Ansible
 - Auto-configuring Loki as Grafana data source
