@@ -1,0 +1,27 @@
+---
+title: CLI Reference
+---
+
+Command overview for `iac-toolbox`.
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `iac-toolbox init` | Run the interactive TUI wizard |
+| `iac-toolbox install` | Re-run install using existing `iac-toolbox.yml` |
+| `iac-toolbox credentials set <key>` | Write a secret to `~/.iac-toolbox/credentials` |
+| `iac-toolbox cloudflare install` | Install Cloudflare Tunnel (no wizard) |
+| `iac-toolbox cloudflare uninstall` | Uninstall Cloudflare Tunnel |
+| `iac-toolbox vault install` | Install HashiCorp Vault (no wizard) |
+| `iac-toolbox vault uninstall` | Uninstall HashiCorp Vault |
+| `iac-toolbox grafana install` | Install Grafana stack (no wizard) |
+| `iac-toolbox grafana uninstall` | Uninstall Grafana stack |
+
+## Global flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--profile <name>` | `default` | Credential profile to read from `~/.iac-toolbox/credentials` |
+| `--version` | — | Print CLI version |
+| `--help` | — | Print usage |

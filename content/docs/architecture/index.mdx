@@ -1,0 +1,45 @@
+---
+title: Architecture
+---
+
+## Repository map
+
+| Repo | Purpose |
+|---|---|
+| `iac-toolbox-cli` | TUI wizard and CLI subcommands (TypeScript/Ink) |
+| `iac-toolbox-raspberrypi` | Ansible playbooks + install scripts (Bash/YAML) |
+| `iac-toolbox-project-docs` | This documentation site (Next.js/MDX) |
+
+## Data flow
+
+```
+Developer machine
+├── iac-toolbox init
+│   ├── Downloads iac-toolbox-raspberrypi → ./infrastructure/
+│   ├── Writes ./infrastructure/iac-toolbox.yml   (non-secret config)
+│   └── Writes ~/.iac-toolbox/credentials          (secrets, mode 600)
+│
+└── install.sh (run by CLI or manually)
+    ├── Reads iac-toolbox.yml via Ansible group_vars
+    ├── Injects secrets from env (sourced from credentials file)
+    └── Runs Ansible playbooks → target device via SSH (or --local)
+
+Target device (Raspberry Pi ARM64)
+├── Docker Engine
+├── HashiCorp Vault      (port 8200)
+├── Grafana stack        (ports 3000, 9090, 9100, 3100, 12345)
+└── cloudflared          → Cloudflare Network → public HTTPS domains
+```
+
+## Architecture validation
+
+The CLI checks `os.arch()` at startup. On non-ARM64 systems a 3-second warning is shown:
+
+```
+⚠️  Detected x86_64 on linux. This tool is optimized for ARM64/Raspberry Pi.
+    You can proceed for testing purposes, but some features may not work as expected.
+```
+
+## Config and secrets separation
+
+`iac-toolbox.yml` holds all non-secret configuration and is safe to commit to git. Sensitive values are stored exclusively in `~/.iac-toolbox/credentials` (mode 600) and injected as environment variables at deploy time. The `iac-toolbox.yml` file uses `{{ variable }}` placeholders to mark injection points.

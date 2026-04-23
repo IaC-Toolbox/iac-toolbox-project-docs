@@ -1,0 +1,33 @@
+---
+title: install.sh Flags
+---
+
+`install.sh` flag reference for the scripts in `infrastructure/scripts/`.
+
+## Flags
+
+| Flag | Effect |
+|---|---|
+| *(none)* | Full deployment: Ansible + Terraform |
+| `--ansible-only` | Skip Terraform, run all Ansible playbooks |
+| `--terraform-only` | Skip Ansible, run Terraform only |
+| `--vault` | Run only HashiCorp Vault Ansible tag |
+| `--cloudflared` | Run only Cloudflare Ansible tag |
+| `--local` | Run Ansible against localhost instead of SSH |
+| `-h`, `--help` | Show usage |
+
+## Examples
+
+```bash
+# Full deployment (Ansible + Terraform)
+./infrastructure/scripts/install.sh
+
+# Ansible only
+./infrastructure/scripts/install.sh --ansible-only
+
+# Install Vault locally
+./infrastructure/scripts/install.sh --vault --local
+
+# Install Cloudflare locally
+./infrastructure/scripts/install.sh --cloudflared --local
+```

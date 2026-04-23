@@ -1,0 +1,129 @@
+---
+title: Quick Start
+---
+
+Get from zero to a running infrastructure wizard in under 5 minutes.
+
+## Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Node.js | ≥ 22.14.0 | Required to run the CLI |
+| pnpm | ≥ 10.33.0 | Used if building from source |
+| Ansible | any recent | Required on the machine running the wizard |
+| Target device | Raspberry Pi OS Lite 64-bit | ARM64 required for production |
+
+## Install the CLI
+
+```bash
+npm install -g iac-toolbox
+```
+
+Verify the installation:
+
+```bash
+iac-toolbox --version
+```
+
+## Run the wizard
+
+```bash
+iac-toolbox init
+```
+
+The wizard runs in your terminal and guides you through all configuration steps.
+
+## Wizard walkthrough
+
+```
+◆ Device profile
+│
+│ ◉ DevOps Server    — Vault, Grafana, CI/CD tooling
+│ ○ App Server       — Application workloads
+│ ○ Both             — Full stack on a single device
+└
+
+◆ Target device type
+│
+│ ◉ Raspberry Pi ARM64   — Fully supported
+│ ○ Local x64            — Supported with warning
+│ ○ AWS EC2              — Coming soon
+└
+
+◆ Connection
+│ Hostname:  192.168.1.100
+│ Username:  pi
+│ SSH key:   ~/.ssh/id_rsa
+└
+
+◆ Infrastructure directory
+│ ◉ ./infrastructure
+│ ○ Enter custom path
+└
+
+◆ Downloading iac-toolbox-raspberrypi scripts...
+│ ✓ Downloaded to ./infrastructure
+└
+
+◆ Select integrations
+│ ◉ GitHub Build Workflow
+│ ◉ Cloudflare Tunnel
+│ ◉ HashiCorp Vault
+│ ◉ Grafana
+│ ○ GitHub Runner         (coming soon)
+│ ○ PagerDuty             (coming soon)
+└
+
+◆ GitHub Build Workflow
+│ Docker Hub username:  myuser
+│ Docker image name:    myapp
+│ Docker Hub token:     ········
+└
+
+◆ Cloudflare Tunnel
+│ API token:   ········
+│ Account ID:  abc123
+│ Zone ID:     def456
+└
+
+◆ HashiCorp Vault
+│ ◉ Yes — expose via Cloudflare (vault.example.com)
+│ ○ No  — local access only (http://localhost:8200)
+└
+
+◆ Grafana
+│ Admin password:  ········
+│ Confirm:         ········
+│ ◉ Yes — expose via Cloudflare (grafana.example.com)
+│ ○ No  — local access only (http://localhost:3000)
+└
+
+◆ Summary
+│ Device profile:    devops-server
+│ Target:            Raspberry Pi ARM64
+│ Host:              192.168.1.100
+│ Directory:         ./infrastructure
+│ Integrations:      github_build_workflow, cloudflare, vault, grafana
+│ Config written:    ./infrastructure/iac-toolbox.yml
+│ Credentials:       ~/.iac-toolbox/credentials
+└
+
+◆ Run install.sh now?
+│ ◉ Yes — install now
+│ ○ No  — I'll run it manually
+└
+
+◆ Installing...
+│ [ansible] Running playbooks on 192.168.1.100...
+│ ✓ docker
+│ ✓ vault
+│ ✓ cloudflare
+│ ✓ grafana
+└ ✓ Done
+```
+
+## What's next
+
+- [CLI Reference](/docs/cli-reference) — all commands and flags
+- [Configuration](/docs/configuration) — `iac-toolbox.yml` schema and credentials format
+- [Integrations](/docs/integrations) — per-integration setup and config reference

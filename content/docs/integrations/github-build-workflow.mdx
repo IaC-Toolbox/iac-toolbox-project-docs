@@ -1,0 +1,43 @@
+---
+title: GitHub Build Workflow
+---
+
+Sets up GitHub Actions workflow files for building and pushing a Docker image to Docker Hub from ARM64.
+
+## Wizard fields
+
+| Field | Description |
+|---|---|
+| Docker Hub username | Your Docker Hub account name |
+| Docker image name | Image name (without tag), e.g. `myapp` |
+| Docker Hub token | Personal access token with `read/write/delete` scope |
+
+## Credentials stored
+
+```ini
+[default]
+docker_hub_username = myuser
+docker_hub_token = <token>
+```
+
+## Config written to iac-toolbox.yml
+
+```yaml
+github_build_workflow:
+  enabled: true
+  docker_hub_username: "myuser"
+  docker_image_name: "myapp"
+  docker_hub_token: "{{ docker_hub_token }}"
+```
+
+## What gets generated
+
+The wizard writes GitHub Actions workflow YAML files to the infrastructure directory. The workflow:
+
+1. Triggers on push to `main`
+2. Builds a Docker image for `linux/arm64`
+3. Pushes to `docker.io/<username>/<image_name>`
+
+## Ansible tags
+
+`github-build-workflow`

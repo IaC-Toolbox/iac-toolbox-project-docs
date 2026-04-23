@@ -1,0 +1,71 @@
+---
+title: Grafana
+---
+
+Installs the full observability stack: Grafana + Prometheus + Node Exporter + Loki + Alloy. All components run as Docker containers.
+
+## Stack components
+
+| Component | Port | Purpose |
+|---|---|---|
+| Grafana | 3000 | Dashboards and alerting UI |
+| Prometheus | 9090 | Metrics collection and storage |
+| Node Exporter | 9100 | Host-level metrics (CPU, memory, disk) |
+| Loki | 3100 | Log aggregation |
+| Alloy | 12345 | Log shipping agent (Grafana Alloy) |
+
+## Wizard fields
+
+- Admin password (masked, confirmed)
+- Optional public domain via Cloudflare Tunnel
+
+## Credentials stored
+
+```ini
+[default]
+grafana_admin_password = <password>
+```
+
+## Config written to iac-toolbox.yml
+
+```yaml
+grafana:
+  enabled: true
+  version: "latest"
+  port: 3000
+  admin_user: "admin"
+  admin_password: "{{ grafana_admin_password }}"
+  domain: "grafana.example.com"
+
+prometheus:
+  enabled: true
+  version: "latest"
+  port: 9090
+  scrape_interval: "15s"
+  retention: "15d"
+
+node_exporter:
+  version: "latest"
+  port: 9100
+
+loki:
+  enabled: true
+  version: "latest"
+  port: 3100
+  retention_hours: 168
+
+alloy:
+  enabled: true
+  version: "latest"
+  port: 12345
+```
+
+## Ansible tags
+
+Runs via `--ansible-only` (full stack).
+
+## Re-install without wizard
+
+```bash
+iac-toolbox grafana install
+```

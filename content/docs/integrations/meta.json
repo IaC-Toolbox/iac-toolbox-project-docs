@@ -1,0 +1,3 @@
+{
+  "pages": ["index", "cloudflare-tunnel", "hashicorp-vault", "grafana", "github-build-workflow"]
+}
