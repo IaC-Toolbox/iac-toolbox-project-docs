@@ -1,0 +1,28 @@
+---
+title: iac-toolbox grafana
+---
+
+```
+iac-toolbox grafana install
+iac-toolbox grafana uninstall
+```
+
+Install or uninstall the Grafana observability stack without running the full wizard.
+
+## install
+
+Reads `grafana_admin_password` from `~/.iac-toolbox/credentials[default]`, then runs:
+
+```bash
+infrastructure/scripts/install.sh --ansible-only --local
+```
+
+## uninstall
+
+Runs:
+
+```bash
+infrastructure/scripts/uninstall-loki.sh --local
+```
+
+Both commands require the working directory to contain an `infrastructure/` folder populated by `iac-toolbox init`.

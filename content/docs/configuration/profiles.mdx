@@ -1,0 +1,33 @@
+---
+title: Profiles
+---
+
+The `--profile` flag is available on `init`, `install`, and `credentials set`. It selects which INI section of `~/.iac-toolbox/credentials` to read from and write to.
+
+## Usage
+
+```bash
+iac-toolbox init --profile production
+iac-toolbox credentials set cloudflare_api_token --profile production
+iac-toolbox install --profile production
+```
+
+## Default profile
+
+If `--profile` is omitted, the `[default]` section is used.
+
+## Fallback behavior
+
+If a key is missing in the specified profile, it falls back to `[default]`. For example:
+
+```ini
+[default]
+cloudflare_api_token = prod-token
+grafana_admin_password = prod-password
+
+[staging]
+cloudflare_api_token = staging-token
+# grafana_admin_password is missing → falls back to [default]
+```
+
+Running `iac-toolbox install --profile staging` injects `staging-token` for Cloudflare and `prod-password` for Grafana.

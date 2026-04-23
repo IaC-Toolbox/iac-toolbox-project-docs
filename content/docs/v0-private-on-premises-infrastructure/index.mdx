@@ -12,35 +12,21 @@ In this guide, we'll walk through setting up a working Raspberry Pi infrastructu
 
 ![alt text](./raspberrypi-pi-4b-cloudflared.png)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    YOUR RASPBERRY PI 4B                         │
-│                                                                 │
-│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────────┐   │
-│  │   Docker     │  │   GitHub    │  │   Cloudflare        │   │
-│  │  Containers  │  │   Actions   │  │   Tunnel            │   │
-│  │  (Your Apps) │  │   Runner    │  │   (cloudflared)     │   │
-│  └──────┬───────┘  └──────┬──────┘  └─────────┬───────────┘   │
-│         │                  │                    │               │
-│         │                  │                    │               │
-│         └──────────────────┴────────────────────┘               │
-│                            │                                    │
-│                   ┌────────┴────────┐                          │
-│                   │  Ansible Vault  │                          │
-│                   │    (Secrets)    │                          │
-│                   └─────────────────┘                          │
-└─────────────────────────────────────────────────────────────────┘
-                             │
-                             │ Internet
-                             ▼
-                  ┌──────────────────────┐
-                  │  Cloudflare Network  │
-                  │   (HTTPS/SSL/TLS)   │
-                  └──────────┬───────────┘
-                             │
-                             ▼
-                    🌍 Public Access
-              (api.yourdomain.com)
+```mermaid
+graph TD
+    Dev["Developer Machine<br/>iac-toolbox CLI"] -->|SSH + Ansible| Pi
+
+    subgraph Pi["Raspberry Pi 4B (ARM64)"]
+        Docker["Docker Engine"]
+        Runner["GitHub Actions Runner"]
+        CF["cloudflared (tunnel)"]
+        Vault["HashiCorp Vault :8200"]
+    end
+
+    Pi -->|outbound tunnel| CFNet["Cloudflare Network<br/>(SSL, DDoS, CDN)"]
+    CFNet --> Internet["🌍 Public Access<br/>api.yourdomain.com"]
+    GH["GitHub (push event)"] -->|dispatch job| Runner
+    Runner --> Docker
 ```
 
 We're going to build a complete on-premises infrastructure setup featuring:

@@ -1,0 +1,36 @@
+---
+title: ARM64 Notes
+---
+
+The `iac-toolbox-raspberrypi` scripts target Raspberry Pi OS Lite 64-bit (ARM64). Running on x86_64 is supported for local testing with caveats.
+
+## Architecture validation
+
+The CLI checks `os.arch()` at startup. On non-ARM64 systems a 3-second warning is shown:
+
+```
+⚠️  Detected x86_64 on linux. This tool is optimized for ARM64/Raspberry Pi.
+    You can proceed for testing purposes, but some features may not work as expected.
+```
+
+## x64 workarounds
+
+When running on x86_64 with `--local`:
+
+- Docker images are pulled for `linux/amd64` instead of `linux/arm64`
+- Some Ansible tasks use `when: ansible_architecture == "aarch64"` guards and will be skipped
+- Cloudflare Tunnel binary is fetched for `amd64`
+
+## Supported device targets
+
+| Device | Architecture | Status |
+|---|---|---|
+| Raspberry Pi 4B | ARM64 (aarch64) | Fully supported |
+| Raspberry Pi 5 | ARM64 (aarch64) | Fully supported |
+| macOS Apple Silicon | ARM64 (aarch64) | Supported with warning (Darwin, not Linux) |
+| macOS Intel / Linux x64 | x86_64 | Supported for local testing only |
+| AWS EC2 | varies | Coming soon |
+
+## Required OS
+
+Target device must run Raspberry Pi OS Lite 64-bit. The Ansible inventory assumes a Debian-based OS with `apt` available.

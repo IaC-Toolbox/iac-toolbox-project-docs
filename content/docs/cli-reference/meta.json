@@ -1,0 +1,3 @@
+{
+  "pages": ["index", "init", "install", "credentials", "cloudflare", "vault", "grafana"]
+}
