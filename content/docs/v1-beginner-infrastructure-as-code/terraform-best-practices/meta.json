@@ -1,4 +1,0 @@
-{
-  "title": "Terraform Best Practices",
-  "pages": ["terraform-modularizing", "terraform-state-in-s3-dynamodb-backend"]
-}

@@ -1,9 +1,0 @@
-{
-  "title": "Core Web App - SSL Termination",
-  "pages": [
-    "index",
-    "provision-ssl-certificate",
-    "provisioning-api-gateway-as-ssl-termination-and-ec2",
-    "provisioning-alb-as-ssl-termination-and-ec2"
-  ]
-}

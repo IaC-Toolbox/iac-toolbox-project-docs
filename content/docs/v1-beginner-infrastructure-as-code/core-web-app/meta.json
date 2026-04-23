@@ -1,4 +1,0 @@
-{
-  "title": "Core Web App - Provisioning Ec2",
-  "pages": ["provisioning-ec2-on-aws-with-terraform", "provisioning-dns-records-with-terraform"]
-}
