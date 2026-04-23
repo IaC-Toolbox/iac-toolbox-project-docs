@@ -10,25 +10,27 @@ title: Architecture
 | `iac-toolbox-raspberrypi` | Ansible playbooks + install scripts (Bash/YAML) |
 | `iac-toolbox-project-docs` | This documentation site (Next.js/MDX) |
 
+```mermaid
+graph TD
+    User["Developer"] --> CLI["iac-toolbox-cli\nTypeScript/Ink TUI"]
+    CLI -->|downloads & runs| RPI["iac-toolbox-raspberrypi\nAnsible + Bash scripts"]
+    RPI -->|provisions| Device["Target Device"]
+    Docs["iac-toolbox-project-docs\nNext.js/MDX"] -->|documents| CLI
+    Docs -->|documents| RPI
+```
+
 ## Data flow
 
-```
-Developer machine
-├── iac-toolbox init
-│   ├── Downloads iac-toolbox-raspberrypi → ./infrastructure/
-│   ├── Writes ./infrastructure/iac-toolbox.yml   (non-secret config)
-│   └── Writes ~/.iac-toolbox/credentials          (secrets, mode 600)
-│
-└── install.sh (run by CLI or manually)
-    ├── Reads iac-toolbox.yml via Ansible group_vars
-    ├── Injects secrets from env (sourced from credentials file)
-    └── Runs Ansible playbooks → target device via SSH (or --local)
-
-Target device (Raspberry Pi ARM64)
-├── Docker Engine
-├── HashiCorp Vault      (port 8200)
-├── Grafana stack        (ports 3000, 9090, 9100, 3100, 12345)
-└── cloudflared          → Cloudflare Network → public HTTPS domains
+```mermaid
+graph LR
+    CLI["iac-toolbox init"] -->|downloads| Scripts["./infrastructure/\niac-toolbox-raspberrypi"]
+    CLI -->|writes| Config["iac-toolbox.yml\n(commit-safe)"]
+    CLI -->|writes| Creds["~/.iac-toolbox/credentials\n(mode 600)"]
+    Scripts -->|read by| InstallSh["install.sh"]
+    Config -->|read by| Ansible["Ansible playbooks"]
+    Creds -->|injected as env| InstallSh
+    InstallSh --> Ansible
+    Ansible -->|SSH or --local| Pi["Target Device\n(Raspberry Pi ARM64)"]
 ```
 
 ## Architecture validation

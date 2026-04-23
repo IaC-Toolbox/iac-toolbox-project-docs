@@ -15,6 +15,23 @@ The Cloudflare Tunnel integration uses API token mode (`mode: api`). The wizard 
 | Hostname | First domain to expose (e.g. `api.example.com`) | No |
 | Service port | Local port the service listens on | No (integer check only) |
 
+```mermaid
+sequenceDiagram
+    participant User as Internet User
+    participant CF as Cloudflare Network
+    participant CFD as cloudflared (device)
+    participant App as Your App
+
+    User->>CF: HTTPS GET api.example.com
+    Note over CF: SSL termination, DDoS protection
+    CF->>CFD: Encrypted outbound tunnel
+    Note over CFD: No port forwarding needed
+    CFD->>App: http://localhost:<port>
+    App-->>CFD: Response
+    CFD-->>CF: Via tunnel
+    CF-->>User: HTTPS response
+```
+
 ## Credential stored
 
 ```ini

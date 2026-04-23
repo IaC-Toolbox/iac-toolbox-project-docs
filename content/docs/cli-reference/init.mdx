@@ -23,6 +23,22 @@ Starts the interactive TUI wizard. Running `iac-toolbox` with no subcommand prin
 | 8 | InstallPromptDialog | Optionally run `install.sh` immediately |
 | 9 | InstallRunnerDialog / ManualRunDialog | Live install output or manual command |
 
+```mermaid
+graph TD
+    A["DeviceProfileDialog\ndevops-server / app-server / both"] --> B["DeviceTypeDialog\nremote / local"]
+    B -->|remote| C["ConnectionDialog\nhostname, user, SSH key"]
+    B -->|local| D["DirectoryDialog"]
+    C --> D
+    D --> E["DownloadDialog\nfetch iac-toolbox-raspberrypi"]
+    E --> F["IntegrationSelectDialog\nmulti-select"]
+    F --> G["Per-module config\nCloudflare / Vault / Grafana / GitHub"]
+    G --> H["WizardSummaryDialog\nconfirm / cancel"]
+    H -->|confirm| I["Write iac-toolbox.yml\n+ credentials"]
+    I --> J["InstallPromptDialog\ninstall now?"]
+    J -->|yes| K["InstallRunnerDialog\nlive output"]
+    J -->|no| L["ManualRunDialog\niac-toolbox install"]
+```
+
 ## Flags
 
 | Flag | Default | Description |

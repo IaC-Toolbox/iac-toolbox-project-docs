@@ -4,6 +4,18 @@ title: Running Ansible Directly
 
 Run Ansible playbooks directly without the CLI. Useful for advanced users and CI pipelines.
 
+```mermaid
+graph TD
+    CLI["iac-toolbox install"] -->|reads| Creds["~/.iac-toolbox/credentials"]
+    CLI -->|exports env vars| Script["install.sh"]
+    Script --> AP["ansible-playbook\nmain.yml"]
+    AP -->|--tags docker| Docker["Docker Engine"]
+    AP -->|--tags vault| Vault["HashiCorp Vault"]
+    AP -->|--tags cloudflare| CF["cloudflared"]
+    AP -->|--tags github-runner| Runner["GitHub Actions Runner"]
+    AP -->|--ansible-only| Grafana["Grafana stack"]
+```
+
 ## Run playbooks
 
 ```bash

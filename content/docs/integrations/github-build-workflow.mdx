@@ -12,6 +12,19 @@ Sets up GitHub Actions workflow files for building and pushing a Docker image to
 | Docker image name | Image name (without tag), e.g. `myapp` |
 | Docker Hub token | Personal access token with `read/write/delete` scope |
 
+```mermaid
+graph LR
+    Push["git push origin main"] --> GH["GitHub Repo"]
+    GH -->|trigger workflow| WF[".github/workflows/deploy.yml"]
+    WF -->|dispatch to runner| Pi["Raspberry Pi\nSelf-hosted Runner"]
+    subgraph Pi
+        Build["docker build -t myapp:SHA ."] --> Reg["docker push myapp:SHA"]
+        Reg --> Deploy["docker stop + pull + run"]
+    end
+    Reg -->|image| DH["Docker Hub"]
+    Deploy --> App["App :4000 ✅"]
+```
+
 ## Credentials stored
 
 ```ini

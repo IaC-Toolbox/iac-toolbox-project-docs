@@ -37,6 +37,16 @@ vault:
   domain: "vault.example.com"   # empty string if local only
 ```
 
+```mermaid
+graph TD
+    App["Your Application"] -->|token-based request| Vault["Vault :8200\nKV v2 engine"]
+    GHA["GitHub Actions"] -->|VAULT_TOKEN env| Vault
+    Vault -->|encrypted storage| KV["kv/myapp/* secrets"]
+    Vault -->|every access| Audit["Audit log"]
+    Admin["Admin"] -->|Web UI / CLI| CFTunnel["Cloudflare Tunnel"]
+    CFTunnel --> Vault
+```
+
 ## Ansible tags
 
 `vault`

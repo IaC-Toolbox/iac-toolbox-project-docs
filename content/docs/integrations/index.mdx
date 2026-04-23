@@ -27,3 +27,11 @@ Integrations are selected during `iac-toolbox init` at the IntegrationSelectDial
 ## Integration dependencies
 
 Vault and Grafana can optionally be exposed via Cloudflare Tunnel if the `cloudflare` integration is also selected. The wizard detects this and offers a public domain for each service.
+
+```mermaid
+graph TD
+    CF["cloudflare"] -->|enables public domain for| Vault["vault"]
+    CF -->|enables public domain for| Grafana["grafana"]
+    GBW["github_build_workflow"] -->|independent| CF
+    Grafana -->|includes| Prom["prometheus\n+ node_exporter\n+ loki\n+ alloy"]
+```
