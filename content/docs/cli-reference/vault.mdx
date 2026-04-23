@@ -1,0 +1,28 @@
+---
+title: iac-toolbox vault
+---
+
+```
+iac-toolbox vault install
+iac-toolbox vault uninstall
+```
+
+Install or uninstall HashiCorp Vault without running the full wizard.
+
+## install
+
+Runs:
+
+```bash
+infrastructure/scripts/install.sh --vault --local
+```
+
+## uninstall
+
+Runs:
+
+```bash
+infrastructure/scripts/uninstall-vault.sh --local
+```
+
+Both commands require the working directory to contain an `infrastructure/` folder populated by `iac-toolbox init`.

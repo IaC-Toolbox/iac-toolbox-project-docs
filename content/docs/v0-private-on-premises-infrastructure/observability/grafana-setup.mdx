@@ -33,36 +33,17 @@ Grafana is an open-source analytics and visualization platform that lets you que
 
 Here's how Grafana fits into your infrastructure:
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                   GRAFANA ARCHITECTURE                         │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    You["🌍 You (anywhere)"] -->|HTTPS| CF["Cloudflare Network"]
+    CF -->|tunnel| GF["Grafana :3000"]
 
-  🌍 You (anywhere in the world)
-       │
-       │ HTTPS Request
-       │ https://grafana.iac-toolbox.com
-       ▼
-  ┌──────────────────────────────┐
-  │   Cloudflare Network         │
-  │   • Handles SSL/TLS          │
-  │   • DDoS protection          │
-  └───────────┬──────────────────┘
-              │
-              │ Encrypted tunnel
-              │
-  ┌───────────▼──────────────────────────────────────────────┐
-  │         Raspberry Pi                                      │
-  │                                                           │
-  │  ┌─────────────────────────────────────────────────┐     │
-  │  │  Grafana (Port 3000)                            │     │
-  │  │  • Web UI for visualizations                    │     │
-  │  │  • Admin password from .env                     │     │
-  │  │  • Ready for data sources                       │     │
-  │  │  • Deployed via Ansible                         │     │
-  │  └─────────────────────────────────────────────────┘     │
-  │                                                           │
-  └───────────────────────────────────────────────────────────┘
+    subgraph Pi["Raspberry Pi"]
+        GF -->|queries metrics| Prom["Prometheus :9090"]
+        GF -->|queries logs| Loki["Loki :3100"]
+        Prom -->|scrapes| NE["Node Exporter :9100"]
+        Alloy["Grafana Alloy :12345"] -->|ships logs| Loki
+    end
 ```
 
 **How it works:**

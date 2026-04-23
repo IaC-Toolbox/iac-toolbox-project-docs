@@ -4,51 +4,20 @@ title: Exposing Services with Cloudflare Tunnel
 
 Most home networks use CGNAT (Carrier-Grade NAT), which means your Raspberry Pi shares an IP address with other devices and cannot be directly accessed from the internet. This is a common problem! Cloudflare Tunnel solves this elegantly by creating a secure outbound connection from your Pi to Cloudflare's network, allowing you to expose services without port forwarding or a public IP. Let's dive in!
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│            CLOUDFLARE TUNNEL ARCHITECTURE                    │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant User as 🌍 Internet User
+    participant CF as Cloudflare Network
+    participant CFD as cloudflared (Pi)
+    participant App as Your App (localhost)
 
-   🌍 Internet User
-        │
-        │ HTTPS Request
-        │ https://api.yourdomain.com
-        ▼
-   ┌────────────────────────────┐
-   │   Cloudflare Network       │
-   │   • Handles SSL/TLS        │
-   │   • DDoS protection        │
-   │   • CDN caching            │
-   │   • DNS routing            │
-   └─────────────┬──────────────┘
-                 │
-                 │ Encrypted tunnel
-                 │ (Outbound connection only)
-                 │
-   ┌─────────────▼──────────────┐
-   │   Your Home Network        │
-   │   • Behind CGNAT/Firewall  │
-   │   • No port forwarding     │
-   │   • No public IP needed    │
-   │                            │
-   │  ┌──────────────────────┐  │
-   │  │  Raspberry Pi        │  │
-   │  │                      │  │
-   │  │  ┌────────────────┐  │  │
-   │  │  │  cloudflared   │  │  │
-   │  │  │  • Maintains   │  │  │
-   │  │  │    tunnel      │  │  │
-   │  │  └────────┬───────┘  │  │
-   │  │           │          │  │
-   │  │           ▼          │  │
-   │  │  ┌────────────────┐  │  │
-   │  │  │  Your App      │  │  │
-   │  │  │  localhost:4000│  │  │
-   │  │  └────────────────┘  │  │
-   │  └──────────────────────┘  │
-   └────────────────────────────┘
-
-   No port forwarding. No public IP. Just works! ✨
+    User->>CF: HTTPS GET https://api.yourdomain.com
+    Note over CF: SSL termination, DDoS protection
+    CF->>CFD: Encrypted tunnel (outbound only)
+    CFD->>App: http://localhost:4000
+    App-->>CFD: Response
+    CFD-->>CF: Response via tunnel
+    CF-->>User: HTTPS response
 ```
 
 ## Github Repository

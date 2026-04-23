@@ -11,47 +11,19 @@ GitHub Actions has quickly become the go-to solution for CI/CD workflows. While 
 
 In this guide, we'll walk through configuring your Raspberry Pi 4B as a GitHub Actions runner and set it up to start automatically on boot. Let's dive in!
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│          SELF-HOSTED GITHUB ACTIONS RUNNER                   │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant GH as GitHub
+    participant Runner as Pi Runner
+    participant Reg as Docker Hub
 
-    ┌─────────────────────────────────────────────┐
-    │           GitHub.com                        │
-    │                                             │
-    │  ┌────────────────────────────────────┐    │
-    │  │   Your Repository                  │    │
-    │  │   • .github/workflows/build.yml    │    │
-    │  │   • Trigger: push to main          │    │
-    │  └─────────────┬──────────────────────┘    │
-    │                │                            │
-    │                │ Job dispatched             │
-    └────────────────┼────────────────────────────┘
-                     │
-                     │ Internet
-                     ▼
-    ┌────────────────────────────────────────────┐
-    │        Raspberry Pi 4B                     │
-    │                                            │
-    │  ┌─────────────────────────────────────┐  │
-    │  │  GitHub Actions Runner Service      │  │
-    │  │  • Listens for jobs                 │  │
-    │  │  • Labels: [self-hosted, ARM64]     │  │
-    │  │  • Auto-starts on boot (systemd)    │  │
-    │  └──────────────┬──────────────────────┘  │
-    │                 │                          │
-    │                 │ Executes workflow        │
-    │                 ▼                          │
-    │  ┌─────────────────────────────────────┐  │
-    │  │  Build Environment                  │  │
-    │  │  • Native ARM64                     │  │
-    │  │  • Docker available                 │  │
-    │  │  • Local file system                │  │
-    │  │  • Custom tools                     │  │
-    │  └─────────────────────────────────────┘  │
-    └────────────────────────────────────────────┘
-
-    Free, fast, and fully under your control! 🚀
+    Dev->>GH: git push origin main
+    GH->>Runner: dispatch workflow job
+    Runner->>Runner: docker build (native ARM64)
+    Runner->>Reg: docker push myapp:SHA
+    Runner->>Runner: docker stop + run new image
+    Runner-->>GH: job success
 ```
 
 ## Github Repository
