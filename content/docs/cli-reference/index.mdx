@@ -17,11 +17,14 @@ Command overview for `iac-toolbox`.
 | `iac-toolbox vault uninstall` | Uninstall HashiCorp Vault |
 | `iac-toolbox grafana install` | Install Grafana stack (no wizard) |
 | `iac-toolbox grafana uninstall` | Uninstall Grafana stack |
+| `iac-toolbox uninstall` | Remove the previously installed infra (coming soon) |
 
 ## Global flags
 
 | Flag | Default | Description |
 |---|---|---|
 | `--profile <name>` | `default` | Credential profile to read from `~/.iac-toolbox/credentials` |
-| `--version` | — | Print CLI version |
+| `-C <path>` | — | Run as if started in `<path>` |
+| `-c <name>=<value>` | — | Set config variable |
+| `-v, --version` | — | Print CLI version |
 | `--help` | — | Print usage |
