@@ -1,0 +1,44 @@
+---
+title: Installation
+---
+
+## Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Node.js | ≥ 22.14.0 | Required to run the CLI |
+| pnpm | ≥ 10.33.0 | Used if building from source |
+| Ansible | any recent | Required on the machine running the wizard |
+| Target device | Raspberry Pi OS Lite 64-bit | ARM64 required for production |
+
+## Supported platforms
+
+| Platform | Status |
+|---|---|
+| Raspberry Pi 4B (ARM64) | Fully supported |
+| Local macOS/Linux (x64) | Supported with warning |
+| AWS EC2 | Coming soon |
+
+## Install via npm
+
+```bash
+npm install -g iac-toolbox
+```
+
+Verify:
+
+```bash
+iac-toolbox --version
+```
+
+## Install from source
+
+```bash
+git clone https://github.com/vvasylkovskyi/iac-toolbox-cli
+cd iac-toolbox-cli
+pnpm install
+pnpm build
+npm install -g .
+```
+
+Requires pnpm ≥ 10.33.0.

@@ -1,0 +1,31 @@
+---
+title: iac-toolbox install
+---
+
+```
+iac-toolbox install [--profile <name>] [--destination <path>]
+```
+
+Runs `install.sh` using a pre-existing `iac-toolbox.yml` in `<destination>`. Use this when you already ran `init` and want to re-apply without going through the wizard again.
+
+## Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--profile <name>` | `default` | Credential profile to inject as env vars |
+| `--destination <path>` | `infrastructure` | Path to directory containing `iac-toolbox.yml` |
+
+## Behavior
+
+Secrets are read from `~/.iac-toolbox/credentials[<profile>]` and passed to `install.sh` as environment variables. The command requires `<destination>/iac-toolbox.yml` to exist.
+
+```bash
+# Re-install with default profile
+iac-toolbox install
+
+# Re-install using production credentials
+iac-toolbox install --profile production
+
+# Re-install from custom directory
+iac-toolbox install --destination ./my-infra
+```

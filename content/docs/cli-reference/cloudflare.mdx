@@ -1,0 +1,28 @@
+---
+title: iac-toolbox cloudflare
+---
+
+```
+iac-toolbox cloudflare install
+iac-toolbox cloudflare uninstall
+```
+
+Install or uninstall the Cloudflare Tunnel integration without running the full wizard.
+
+## install
+
+Reads `cloudflare_api_token` from `~/.iac-toolbox/credentials[default]`, then runs:
+
+```bash
+infrastructure/scripts/install.sh --cloudflared --local
+```
+
+## uninstall
+
+Runs:
+
+```bash
+infrastructure/scripts/uninstall-cloudflare.sh --local
+```
+
+Both commands require the working directory to contain an `infrastructure/` folder populated by `iac-toolbox init`.
