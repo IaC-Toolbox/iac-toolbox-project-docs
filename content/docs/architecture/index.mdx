@@ -45,3 +45,40 @@ The CLI checks `os.arch()` at startup. On non-ARM64 systems a 3-second warning i
 ## Config and secrets separation
 
 `iac-toolbox.yml` holds all non-secret configuration and is safe to commit to git. Sensitive values are stored exclusively in `~/.iac-toolbox/credentials` (mode 600) and injected as environment variables at deploy time. The `iac-toolbox.yml` file uses `{{ variable }}` placeholders to mark injection points.
+
+## Hexagonal architecture (Ports and Adapters)
+
+The Ansible roles use hexagonal architecture to abstract OS-specific implementations. This enables the same playbooks to run on both Raspberry Pi (Debian/systemd) and macOS (brew/launchd) for local testing.
+
+### Port Roles
+
+Two port roles provide unified interfaces:
+
+| Port Role | Purpose | Adapter Selection |
+|---|---|---|
+| `service_ctl` | Service lifecycle (start/stop/enable) | Uses `ansible_service_mgr` to select `systemd.yml` or `launchd.yml` |
+| `package` | Package installation | Uses `ansible_pkg_mgr` to select `apt.yml` or `brew.yml` |
+
+### How it works
+
+```mermaid
+graph LR
+    Role["Consumer Role\n(docker, vault, etc.)"] -->|include_role| Port["Port Role\n(service_ctl)"]
+    Port -->|when: systemd| Systemd["systemd.yml\nAdapter"]
+    Port -->|when: launchd| Launchd["launchd.yml\nAdapter"]
+    Systemd --> Linux["Debian OS"]
+    Launchd --> Mac["macOS"]
+```
+
+Variables set in `group_vars/all.yml`:
+```yaml
+package_manager: "{{ ansible_pkg_mgr }}"    # apt | homebrew
+service_manager: "{{ ansible_service_mgr }}" # systemd | launchd
+```
+
+### Benefits
+
+- **Single playbook** runs on both Raspberry Pi and macOS
+- **Local testing** with `--local` flag uses macOS adapters
+- **No platform checks** scattered across roles — centralized in port roles
+- **Easy extension** — add new adapters (e.g., Alpine/OpenRC) without touching consumer roles

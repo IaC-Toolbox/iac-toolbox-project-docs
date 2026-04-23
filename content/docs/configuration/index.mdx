@@ -34,11 +34,11 @@ github_runner:
 
 cloudflare:
   enabled: true
-  mode: "api"                    # api (token-based) only in CLI flow
+  mode: "api"                    # "api" (CLI flow) or "oauth" (Ansible default)
   tunnel_name: "example.com-tunnel"
-  account_id: "abc123"
-  zone_id: "def456"
-  cloudflare_api_token: "{{ cloudflare_api_token }}"  # injected by CLI at deploy time
+  account_id: "abc123"           # required for API mode only
+  zone_id: "def456"              # required for API mode only
+  cloudflare_api_token: "{{ cloudflare_api_token }}"  # API mode only
   domains:
     - hostname: "api.example.com"
       service_port: 80
@@ -81,6 +81,7 @@ alloy:
   enabled: true
   version: "latest"
   port: 12345
+  domain: "alloy.example.com"   # empty string if not exposed via Cloudflare
 
 pagerduty:
   enabled: false                 # coming soon
@@ -95,7 +96,9 @@ pagerduty:
 | `docker.enabled` | bool | Always `true`; Docker is always installed |
 | `github_build_workflow.enabled` | bool | Enable GitHub Actions Docker build workflow |
 | `cloudflare.enabled` | bool | Enable Cloudflare Tunnel |
-| `cloudflare.mode` | string | Always `api` in CLI flow |
+| `cloudflare.mode` | string | `api` (CLI) or `oauth` (Ansible default) |
+| `cloudflare.account_id` | string | Required for API mode only |
+| `cloudflare.zone_id` | string | Required for API mode only |
 | `cloudflare.domains` | list | Hostnames and local ports to expose |
 | `vault.enabled` | bool | Enable HashiCorp Vault |
 | `vault.enable_kv` | bool | Enable KV secrets engine |
@@ -104,3 +107,4 @@ pagerduty:
 | `prometheus.scrape_interval` | string | Metrics scrape interval (e.g. `15s`) |
 | `prometheus.retention` | string | Metrics retention period (e.g. `15d`) |
 | `loki.retention_hours` | int | Log retention in hours |
+| `alloy.domain` | string | Public domain for Alloy UI (via Cloudflare) |

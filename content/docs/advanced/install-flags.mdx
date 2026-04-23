@@ -16,14 +16,39 @@ title: install.sh Flags
 | `--local` | Run Ansible against localhost instead of SSH |
 | `-h`, `--help` | Show usage |
 
+## What runs when
+
+| Mode | Ansible playbooks | Terraform |
+|---|---|---|
+| Default | ✓ All roles | ✓ Grafana alerts |
+| `--ansible-only` | ✓ All roles | ✗ Skipped |
+| `--terraform-only` | ✗ Skipped | ✓ Grafana alerts |
+| `--vault` | ✓ Vault role only | ✗ Skipped |
+| `--cloudflared` | ✓ Cloudflare role only | ✗ Skipped |
+
+### Terraform scope
+
+Terraform manages **Grafana alert rules** only. The infrastructure is deployed via Ansible.
+
+Terraform workspace: `terraform/grafana-alerts/`
+
+Alert rules configured:
+- High CPU temperature (>70°C)
+- High CPU usage (>80% for 5m)
+- Docker container down
+- Loki log errors
+
 ## Examples
 
 ```bash
 # Full deployment (Ansible + Terraform)
 ./infrastructure/scripts/install.sh
 
-# Ansible only
+# Ansible only (no alert rules)
 ./infrastructure/scripts/install.sh --ansible-only
+
+# Deploy alert rules only (requires Grafana already running)
+./infrastructure/scripts/install.sh --terraform-only
 
 # Install Vault locally
 ./infrastructure/scripts/install.sh --vault --local
