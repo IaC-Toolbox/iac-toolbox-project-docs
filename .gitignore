@@ -33,3 +33,5 @@ terraform.tfstate.backup
 **/.aws-credentials
 .terraform.lock.hcl
 .claude/worktrees/
+.claude/context/roadmap/features/
+.claude/context/roadmap/bugs/
