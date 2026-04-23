@@ -6,6 +6,14 @@ You've got Grafana running, but it's pretty useless without data. In this guide,
 
 Think of it this way: Grafana is your dashboard, Prometheus is your database, and Node Exporter is your sensor. Let's wire them up automatically!
 
+```mermaid
+graph LR
+    Prom["Prometheus :9090"] -->|scrape /metrics every 15s| NE["Node Exporter :9100"]
+    NE -->|exposes| CPU["CPU / Memory / Disk / Network"]
+    Prom -->|stores| TSDB["Local TSDB (15d retention)"]
+    GF["Grafana :3000"] -->|PromQL queries| Prom
+```
+
 **What this tutorial covers:**
 - Automated Prometheus + Node Exporter deployment using Ansible
 - Auto-configuring Prometheus as Grafana data source
