@@ -1,0 +1,68 @@
+---
+title: Uninstall Scripts
+---
+
+The infrastructure repository includes uninstall scripts for safe removal of components without affecting other services.
+
+## Available scripts
+
+| Script | Purpose | What it removes |
+|---|---|---|
+| `uninstall-vault.sh` | Remove HashiCorp Vault | Docker container, systemd service, `~/vault/` directory |
+| `uninstall-cloudflared.sh` | Remove Cloudflare tunnel | Docker container, systemd service, `~/.cloudflared/` config |
+| `uninstall-loki.sh` | Remove Loki stack | Docker containers (Loki + Alloy), systemd services, `~/loki/` data |
+
+## Usage
+
+All uninstall scripts support two execution modes:
+
+```bash
+# Remote uninstall (via SSH)
+./scripts/uninstall-vault.sh
+
+# Local uninstall (on the target device itself)
+./scripts/uninstall-vault.sh --local
+```
+
+The `--local` flag is useful when testing directly on the Raspberry Pi or when SSH is unavailable.
+
+## What gets preserved
+
+Uninstall scripts are **component-scoped** — they only remove their specific service:
+
+- **Docker** itself is not removed
+- **Other services** continue running
+- **Cloudflare tunnel** routes for other services remain active
+- **Grafana datasources** for removed components are not cleaned up (manual removal required)
+
+## Example: Clean Vault reinstall
+
+```bash
+# Uninstall existing Vault
+./scripts/uninstall-vault.sh
+
+# Reinstall with fresh configuration
+./scripts/install.sh --vault
+```
+
+This is useful for:
+- Testing Vault initialization from scratch
+- Rotating unseal keys
+- Clearing all stored secrets
+
+## Environment variables
+
+Uninstall scripts use the same connection variables as `install.sh`:
+
+```bash
+export RPI_HOST=raspberrypi.local  # Target device hostname
+export RPI_USER=pi                  # SSH user
+export RPI_LOCAL=true               # Or use --local flag
+```
+
+## Safety notes
+
+- All scripts prompt for confirmation before removing data directories
+- Scripts are idempotent — safe to run multiple times
+- Systemd services are stopped before removal
+- Docker containers are force-removed with `docker rm -f`
