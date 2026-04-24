@@ -1,6 +1,5 @@
 {
   "pages": [
-    "hello",
     "01-infrastructure-as-code-journey",
     "02-deploying-ec2-instance-with-terraform",
     "03-provision-dns-records-with-terraform",
