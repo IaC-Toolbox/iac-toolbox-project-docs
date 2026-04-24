@@ -27,6 +27,13 @@
     "v0-12-logs-with-loki",
     "v0-13-grafana-alerts",
     "v0-14-grafana-pagerduty",
-    "v0-15-conclusion"
+    "v0-15-conclusion",
+    "open-claw-0-introduction",
+    "open-claw-1-secure-setup",
+    "open-claw-2-installing-openclaw",
+    "open-claw-3-performance-stability",
+    "open-claw-4-codex-delegation",
+    "open-claw-5-heartbeats-notifications",
+    "open-claw-6-obsidian-autonomous-loop"
   ]
 }

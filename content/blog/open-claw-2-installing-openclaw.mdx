@@ -1,0 +1,190 @@
+---
+title: Running an AI Coding Bot on Raspberry Pi — Part 2 Installing & Wiring Up OpenClaw
+description: Node.js install, the OpenClaw package, fixing a missing Discord plugin dependency, tunnelling the dashboard, and approving your first Discord pairing.
+author: Viktor Vasylkovskyi
+date: "2026-04-05"
+---
+
+**Previous:** [Part 1 - Secure Setup](./open-claw-1-secure-setup)
+
+With the security model in place from Part 1, it's time to actually install OpenClaw and get it talking on Discord. There are a few rough edges along the way — a missing plugin dependency and a pairing step that's easy to miss — but by the end of this post the bot is responding.
+
+## Install Node.js 22+
+
+OpenClaw requires Node.js 22 or newer. The cleanest way to get it on a Pi:
+
+```sh
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node --version  # should be v22+
+```
+
+## Installing OpenClaw
+
+```sh
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+You should see output like this:
+
+```sh
+  🦞 OpenClaw Installer
+  It's not "failing," it's "discovering new ways to configure the same thing wrong."
+
+✓ Detected: linux
+
+Install plan
+OS: linux
+Install method: npm
+Requested version: latest
+
+[1/3] Preparing environment
+✓ Node.js v22.22.2 found
+· Active Node.js: v22.22.2 (/usr/bin/node)
+· Active npm: 10.9.7 (/usr/bin/npm)
+
+[2/3] Installing OpenClaw
+✓ Git already installed
+· Configuring npm for user-local installs
+✓ npm configured for user installs
+· Installing OpenClaw v2026.4.2
+✓ OpenClaw npm package installed
+✓ OpenClaw installed
+
+[3/3] Finalizing setup
+
+! PATH missing npm global bin dir: /home/vvasylkovskyi/.npm-global/bin
+  This can make openclaw show as "command not found" in new terminals.
+  Fix (zsh: ~/.zshrc, bash: ~/.bashrc):
+    export PATH="/home/vvasylkovskyi/.npm-global/bin:$PATH"
+
+🦞 OpenClaw installed successfully (OpenClaw 2026.4.2 (d74a122))!
+```
+
+Pay attention to the PATH warning. Add that export to your shell rc file, otherwise `openclaw` will show as "command not found" after you open a new terminal.
+
+## Running onboard
+
+```sh
+openclaw onboard --install-daemon
+```
+
+Follow the onboarding daemon. When you reach the channels section, add Discord:
+
+```sh
+◇  Discord bot token ───────────────────────────────────────────────────────────────────────╮
+│                                                                                           │
+│  1) Discord Developer Portal -> Applications -> New Application                           │
+│  2) Bot -> Add Bot -> Reset Token -> copy token                                           │
+│  3) OAuth2 -> URL Generator -> scope 'bot' -> invite to your server                       │
+│  Tip: enable Message Content Intent if you need message text. (Bot -> Privileged Gateway  │
+│  Intents -> Message Content Intent)                                                       │
+│  Docs: discord                                                                            │
+│                                                                                           │
+├───────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Fixing the missing Discord plugin dependency
+
+After onboarding, running `openclaw status` threw this:
+
+```sh
+14:11:04+01:00 [plugins] discord failed to load from /home/vvasylkovskyi/.npm-global/lib/node_modules/openclaw/dist/extensions/discord/index.js: Error: Cannot find module '@buape/carbon'
+Require stack:
+- /home/vvasylkovskyi/.npm-global/lib/node_modules/openclaw/dist/ui-Cvzn7c_3.js
+[openclaw] Failed to start CLI: PluginLoadFailureError: plugin load failed: discord: Error: Cannot find module '@buape/carbon'
+```
+
+The Discord plugin depends on `@buape/carbon` which doesn't get pulled in automatically. Fix it:
+
+```sh
+npm install -g @buape/carbon
+```
+
+After that, `openclaw status` comes up clean with the Discord channel showing OK.
+
+## Setting up the Discord bot correctly
+
+I still couldn't get answers from the bot after fixing the dependency. The bot needs to be in a server you share, even for DMs to work. If you haven't added it to a server yet:
+
+- Generate an invite link in Discord Developer Portal → OAuth2 → URL Generator
+- Scopes: `bot`
+- Permissions: Send Messages, Read Message History, Read Messages
+
+Also make sure Message Content Intent is enabled under Bot → Privileged Gateway Intents. Without it the bot can't read message text.
+
+## Setting the Discord token in config
+
+Export your bot token and set it via the CLI:
+
+```sh
+export DISCORD_BOT_TOKEN="..."
+openclaw config set channels.discord.token --ref-provider default --ref-source env --ref-id DISCORD_BOT_TOKEN
+openclaw config set channels.discord.enabled true --strict-json
+```
+
+Then restart the gateway to apply:
+
+```sh
+openclaw gateway stop
+openclaw gateway
+```
+
+When the gateway comes up you should see:
+
+```sh
+14:51:49+01:00 [discord] logged in to discord as 1490334905945821204 (AI)
+```
+
+## Accessing the dashboard from your laptop
+
+The dashboard runs on the Pi at port 18789. To access it from your laptop without exposing it to the internet:
+
+```sh
+ssh -L 18789:127.0.0.1:18789 vvasylkovskyi@raspberry-4b.local -N
+```
+
+Now open `http://127.0.0.1:18789` in your browser. It will ask for an auth token. Get it from the Pi:
+
+```sh
+ssh vvasylkovskyi@raspberry-4b.local
+cat ~/.openclaw/openclaw.json | grep token
+```
+
+## Approving your Discord pairing
+
+Very important — the first message always has to be a DM to the bot. It will reply with a pairing code:
+
+```sh
+AI
+APP
+ — 15:07
+OpenClaw: access not configured.
+
+Your Discord user id: ...
+Pairing code: ...
+
+Ask the bot owner to approve with:
+openclaw pairing approve discord ...
+```
+
+Then approve from the Pi:
+
+```sh
+openclaw pairing approve discord ...
+```
+
+After this the bot responds to your messages. Test it in the dashboard UI first to confirm the core is working, then test Discord.
+
+## What's working now
+
+- OpenClaw installed and running as a daemon
+- Discord channel connected and authenticated
+- Dashboard accessible via SSH tunnel
+- Bot responding to messages
+
+The next post covers the unglamorous but important stuff — the Pi running out of swap memory, timeouts, and making the whole thing persistent so it doesn't silently die overnight.
+
+---
+
+**Previous:** [Part 1 - Secure Setup](./open-claw-1-secure-setup) | **Next:** [Part 3 - Performance & Stability](./open-claw-3-performance-stability)

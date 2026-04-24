@@ -1,0 +1,210 @@
+---
+title: Running an AI Coding Bot on Raspberry Pi — Part 5 Heartbeats, Notifications & GitHub Project Workflow
+description: Closing the loop — wake triggers so Codex notifies OpenClaw on completion, check-agents.sh, HEARTBEAT.md task registry, Discord channel notifications, and spawning two agents in parallel from a single message.
+author: Viktor Vasylkovskyi
+date: "2026-04-13"
+---
+
+**Previous:** [Part 4 - Codex Delegation](./open-claw-4-codex-delegation)
+
+After getting Codex running in tmux and writing code reliably, I hit a new problem: silence. Codex would finish its work and sit there, while I had no idea whether it succeeded, failed, or was still running. This post covers closing the loop — wake triggers, the heartbeat system, and how I eventually got to a workflow where pointing the bot at a GitHub project spawns independent agents for each issue automatically.
+
+## The silence problem
+
+The flow I had: OpenClaw spawns Codex via `spawn-agent.sh`, Codex works, Codex writes results to `outbox.json`. But OpenClaw wasn't watching `outbox.json`. It spawned the task and forgot about it.
+
+The fix has two parts:
+
+1. Codex sends a wake signal to OpenClaw when it finishes
+2. OpenClaw's heartbeat picks up that signal and checks the outbox
+
+## The WAKE_TRIGGER
+
+At the end of every Codex prompt, I append:
+
+```sh
+WAKE_TRIGGER="When completely finished, write the outbox to \$CODEX_MAILBOX/outbox.json with status done, then run this command to notify OpenClaw immediately:
+openclaw system event --text \"Task $TASK_ID completed\" --mode now"
+```
+
+`openclaw system event --mode now` wakes up the heartbeat immediately instead of waiting for the next scheduled tick.
+
+## check-agents.sh
+
+This script is what runs when the heartbeat fires. It:
+
+1. Reads `active-tasks.json` and task `outbox.json` files
+2. Finds tasks signaled as `done` by Codex but not yet updated in `active-tasks.json`
+3. Checks the PRs from `outbox.json` to see if CI/CD passed
+4. Sends a Discord notification
+5. Updates `active-tasks.json`
+
+The Discord notification uses the first-class CLI:
+
+```sh
+notify() {
+  local msg="$1"
+  openclaw message send \
+    --channel discord \
+    --target "channel:$CHANNEL" \
+    --message "$msg" \
+    2>/dev/null || echo "$LOG_PREFIX WARN: discord notify failed for $TASK_ID"
+}
+```
+
+## HEARTBEAT.md — the task registry
+
+The heartbeat system in OpenClaw lets you define named tasks that run on a schedule. The config in `openclaw.json`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "heartbeat": {
+        "every": "5s",
+        "target": "last",
+        "directPolicy": "allow",
+        "lightContext": true,
+        "isolatedSession": true,
+        "activeHours": {
+          "start": "08:00",
+          "end": "23:00",
+          "timezone": "Europe/Lisbon"
+        }
+      }
+    }
+  }
+}
+```
+
+`every: "5s"` is how often the gateway wakes OpenClaw to run a heartbeat turn at all. This is the outer tick. Inside `HEARTBEAT.md`, each named task has its own `interval` — that task only fires if enough time has passed since it last ran.
+
+The flow:
+
+```
+every 5s → gateway wakes OpenClaw → reads HEARTBEAT.md →
+  checks if check-active-tasks is due (every 20s) →
+  if due: runs it | if not due: HEARTBEAT_OK
+```
+
+The `HEARTBEAT.md` task for agent monitoring:
+
+```sh
+tasks:
+  - name: on-agent-complete
+    interval: 5s
+    prompt: |
+        Check if any system events arrived since last heartbeat.
+        If so, run bash ~/.openclaw/workspace/scripts/check-agents.sh immediately
+        and report results to Viktor in Discord.
+        Otherwise reply HEARTBEAT_OK.
+```
+
+To check if heartbeat is running:
+
+```sh
+openclaw logs 2>/dev/null | grep -i heartbeat | tail -20
+```
+
+To force a heartbeat run for debugging:
+
+```sh
+openclaw system event --text "heartbeat test (force run)" --mode now --json
+```
+
+Then immediately check what it did:
+
+```sh
+openclaw system heartbeat last --json
+```
+
+## Hardcoding Discord channel IDs in TOOLS.md
+
+Rather than asking me for a channel ID during every heartbeat run, I put them in `TOOLS.md`:
+
+```sh
+| Heartbeat name            | Discord Channel ID            | Purpose                            |
+|---------------------------|-------------------------------|------------------------------------|
+| project-autopick          | 1493601197670666412           | Autopick spawn notifications       |
+| roadmap-context-to-issues | 1493558359495016488           | New issues creation notifications  |
+```
+
+And in `HEARTBEAT.md`, a global instruction:
+
+```sh
+All tasks listed here are autonomous heartbeat tasks.
+When a task is invoked from this registry, run it in heartbeat/autonomous mode.
+Do not ask Viktor for clarification unless the task explicitly says to.
+Do not ask Viktor for a channel ID during heartbeat runs.
+Use the heartbeat channel registry in TOOLS.md when a channel must be resolved.
+If nothing needs attention, reply HEARTBEAT_OK.
+```
+
+## The GitHub project workflow
+
+Once the basic notification loop was working, I gave the bot access to my GitHub project:
+
+```sh
+gh auth refresh -s read:project
+```
+
+Then manually tested asking it to handle issues from a GitHub project URL. The result was wild — it spawned two agents to handle two issues independently:
+
+```sh
+✅ PR #21 ready for review — issue-19-single-wizard
+Completed docs-first plan and single Ink wizard UI with arrow navigation; pushed branch and opened PR #21 linked to issue #19.
+https://github.com/IaC-Toolbox/iac-toolbox-cli/pull/21
+
+✅ PR #22 ready for review — issue-18-pnpm
+Migrated iac-toolbox-cli to pnpm, validated, committed, pushed, and opened PR #22 linked to issue #18.
+https://github.com/IaC-Toolbox/iac-toolbox-cli/pull/22
+```
+
+Two parallel agents, two PRs, zero manual coding. That's the payoff for all the plumbing work.
+
+## The project-autopick heartbeat
+
+To make this happen autonomously without me prompting it, I added a heartbeat task that reads the GitHub project and picks up unassigned issues:
+
+```sh
+- name: project-autopick
+  interval: 60m
+  prompt_file: ~/.openclaw/workspace/heartbeat-prompts/project-autopick.md
+```
+
+The prompt file instructs the bot to scan for open issues with no assignee, check `active-tasks.json` to avoid duplicating work, and spawn agents for anything actionable.
+
+## Handling merge conflicts from parallel PRs
+
+Running parallel agents creates a new problem: merge conflicts. Two levels:
+
+1. Conflicts before merging — solvable by rebasing the branch and asking the agent to resolve
+2. Conflicts after merging — when one PR merges, the other branch is now stale
+
+The second one is the harder problem. GitHub webhooks could potentially trigger rebases automatically, but for now I handle it manually: after merging a PR, I ask OpenClaw to rebase the other open branches.
+
+## Cleaning stale sessions
+
+One issue I hit repeatedly: old OpenClaw session files contributing stale context to new runs, causing the agent to replay old errors as if they were current. The fix:
+
+```sh
+mkdir -p ~/.openclaw/agents/main/sessions-archive
+mv ~/.openclaw/agents/main/sessions/*.jsonl ~/.openclaw/agents/main/sessions-archive/
+```
+
+If your bot keeps giving you the same stale error after you've already fixed the underlying problem, session cleanup is the first thing to try.
+
+## What's working now
+
+- Codex sends a wake trigger on completion
+- Heartbeat picks it up within seconds
+- Discord notification with PR link fires automatically
+- GitHub project scanning picks up unassigned issues
+- Parallel agents work independently with git worktrees
+- Channel IDs are stable in config — no runtime asking
+
+The next post covers the final evolution: giving the bot a proper memory system and making it generate its own work from a product roadmap you write.
+
+---
+
+**Previous:** [Part 4 - Codex Delegation](./open-claw-4-codex-delegation) | **Next:** [Part 6 - Obsidian & Autonomous Loop](./open-claw-6-obsidian-autonomous-loop)

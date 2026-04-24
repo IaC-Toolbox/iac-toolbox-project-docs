@@ -1,0 +1,89 @@
+---
+title: Running an AI Coding Bot on Raspberry Pi — Part 1 Secure Setup
+description: Before installing anything, get the security right. Scoping filesystem access, creating a fine-grained GitHub PAT, and setting Anthropic spending caps so your bot can't ruin you.
+author: Viktor Vasylkovskyi
+date: "2026-04-05"
+---
+
+**Previous:** [OpenClaw on Raspberry Pi - Complete Guide](./open-claw-0-introduction)
+
+I finished setting up my Raspberry Pi device with metrics, alerting, domain access and secrets and I feel like it has become a pretty neat device that does nothing. I got intrigued by OpenClaw, a bot with access to LLM, could be sitting on my raspberry pi and do some work for me. Naturally since I don't have much time to build the projects myself, this idea sounds very exciting. So here I am, with no time for building projects, going to dedicate some time experimenting with setting up OpenClaw myself on my device, and see if it can indeed build code for me.
+
+I am a Software Engineer myself, and have a good understanding of the power of such tools. So the first thing I want to ensure is that my OpenClaw does exactly what I ask, and doesn't become a security nightmare, spend my tokens with LLM ruining me, or leak my secrets into the wild.
+
+## The threat model
+
+Before installing anything, I want to figure out what security properties I actually need:
+
+- No access to secrets outside the project folder
+- No runaway token spend that costs real money
+
+At the same time, it should do something useful:
+
+- Write code into a GitHub repository
+
+Getting this right before install means I can reason about what the bot can and can't do from day one.
+
+## Protecting folder access with Docker
+
+To prevent OpenClaw from accessing my whole device, I will scope it to one folder — a GitHub project. The best guarantee is to run OpenClaw in Docker. If OpenClaw is inside a container that only mounts `~/workspace/myproject`, it physically cannot access your system keys regardless of what the LLM decides to do.
+
+```sh
+ Docker container          ← OpenClaw can't see the host at all
+    └── allowed_paths     ← within the container, scoped to one folder
+        └── GitHub PAT    ← one repo, no delete permissions
+            └── Spending cap ← on Anthropic console
+```
+
+This is the security stack. Each layer is independent — even if one fails, the next one holds.
+
+## GitHub fine-grained PAT
+
+I want to see what it did on GitHub UI, and not have to come back into the device and git commit things myself. For that I will create a GitHub token — fine-grained PAT:
+
+- Go to GitHub → Settings → Developer Settings → Fine-grained tokens
+- Scope it to one specific repository only
+- Permissions: Contents: Read & Write, nothing else
+
+This means it literally cannot touch other repos, cannot delete the repo, cannot modify settings. For regular commits, my prompt is like:
+
+```sh
+"Commit after every meaningful change with a descriptive message"
+```
+
+That's the entire commit policy — simple, but it means I always have a readable git history without needing to babysit the agent.
+
+## API costs — this is the real risk
+
+Leaving a bot running overnight against an LLM API with no cap is genuinely dangerous. Anthropic has spending controls for exactly this:
+
+- Go to `console.anthropic.com` → Billing → Usage limits
+- Set a monthly spending cap (e.g. $30)
+- Set a low balance alert at e.g. $20
+
+When the cap hits, API calls simply fail — OpenClaw stops. I won't wake up to a $1000 bill. Realistically, a night of coding with Claude Sonnet is roughly $2–8 for a typical project, not hundreds, unless you're feeding it massive context repeatedly. But set the cap anyway.
+
+## Preparing the API key
+
+With spending limits in place, create your Anthropic API key and store it ready for the install step:
+
+```sh
+ANTHROPIC_API_KEY=""
+```
+
+Don't put this in a file yet — we'll configure it properly during the install.
+
+## What we've established
+
+Before touching the Pi, we now have:
+
+1. A mental model of the security boundaries (Docker → scoped path → limited PAT → spending cap)
+2. A GitHub PAT that can only touch one repo and can't delete anything
+3. An Anthropic account with a hard monthly spending cap
+4. An API key ready to use
+
+The next post covers the actual install — Node.js, the OpenClaw package, and getting Discord working.
+
+---
+
+**Previous:** [OpenClaw on Raspberry Pi - Complete Guide](./open-claw-0-introduction) | **Next:** [Part 2 - Installing OpenClaw](./open-claw-2-installing-openclaw)
