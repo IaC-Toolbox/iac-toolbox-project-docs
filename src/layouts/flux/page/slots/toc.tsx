@@ -1,16 +1,20 @@
 'use client';
 
 import * as Base from '../../../../components/toc';
-import { useI18n } from 'fumadocs-ui/contexts/i18n';
-import { useTreePath } from 'fumadocs-ui/contexts/tree';
+// import { useI18n } from 'fumadocs-ui/contexts/i18n';
+// import { useTreePath } from 'fumadocs-ui/contexts/tree';
 import { cn } from '../../../../lib/cn';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../../components/ui/collapsible';
-import { ChevronDown } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  // CollapsibleTrigger,
+} from '../../../../components/ui/collapsible';
+// import { ChevronDown } from 'lucide-react';
 import {
   type ComponentProps,
   type ReactNode,
   createContext,
-  use,
+  // use,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -19,7 +23,7 @@ import {
 } from 'react';
 import * as TocDefault from '../../../../components/toc/default';
 import * as TocClerk from '../../../../components/toc/clerk';
-import { AnimatePresence, motion } from 'motion/react';
+// import { AnimatePresence, motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 
 const TocPopoverContext = createContext<{
@@ -58,7 +62,7 @@ export type TOCProps = {
 
 export function TOC({
   container,
-  trigger,
+  // trigger,
   content,
   header,
   footer,
@@ -66,7 +70,8 @@ export function TOC({
   list,
 }: TOCProps) {
   const items = Base.useTOCItems();
-  const { TOCItems, TOCEmpty, TOCItem } = style === 'clerk' ? TocClerk : TocDefault;
+  // const { TOCItems, TOCEmpty, TOCItem } = style === 'clerk' ? TocClerk : TocDefault;
+  const { TOCItems, TOCEmpty } = style === 'clerk' ? TocClerk : TocDefault;
 
   return (
     <PageTOCPopover {...container}>
@@ -75,14 +80,14 @@ export function TOC({
         <Base.TOCScrollArea>
           <TOCItems {...list}>
             {items.length === 0 && <TOCEmpty />}
-            {items.map((item) => (
+            {/* {items.map((item) => (
               <TOCItem key={item.url} item={item} />
-            ))}
+            ))} */}
           </TOCItems>
         </Base.TOCScrollArea>
         {footer}
       </PageTOCPopoverContent>
-      <PageTOCPopoverTrigger {...trigger} />
+      {/* <PageTOCPopoverTrigger {...trigger} /> */}
     </PageTOCPopover>
   );
 }
@@ -116,7 +121,7 @@ function PageTOCPopoverPhysical({ className, children, ...rest }: ComponentProps
     return () => {
       window.removeEventListener('click', onClick);
     };
-  }, []);
+  }, [onClick]);
 
   return (
     <TocPopoverContext
@@ -131,7 +136,7 @@ function PageTOCPopoverPhysical({ className, children, ...rest }: ComponentProps
       <Collapsible
         open={open}
         onOpenChange={setOpen}
-        data-toc-popover=""
+        data-toc-popover=''
         className={cn('relative h-9 animate-fd-fade-in', className)}
         {...rest}
       >
@@ -149,129 +154,129 @@ function PageTOCPopoverPhysical({ className, children, ...rest }: ComponentProps
   );
 }
 
-function PageTOCPopoverTrigger({ className, ...props }: ComponentProps<'button'>) {
-  const { text } = useI18n();
-  const { open } = use(TocPopoverContext)!;
-  const items = Base.useItems();
-  const selectedIdx = items.findIndex((item) => item.active);
-  const path = useTreePath().at(-1);
-  const spanProps = {
-    transition: {
-      duration: 0.1,
-    },
-    initial: {
-      opacity: 0,
-      y: 10,
-    },
-    animate: {
-      opacity: 1,
-      y: 0,
-    },
-    exit: {
-      opacity: 0,
-      y: -10,
-    },
-    className: cn(open && 'text-fd-popover-foreground'),
-  };
+// function PageTOCPopoverTrigger({ className, ...props }: ComponentProps<'button'>) {
+//   const { text } = useI18n();
+//   const { open } = use(TocPopoverContext)!;
+//   // const items = Base.useItems();
+//   // const selectedIdx = items.findIndex((item) => item.active);
+//   const path = useTreePath().at(-1);
+//   const spanProps = {
+//     transition: {
+//       duration: 0.1,
+//     },
+//     initial: {
+//       opacity: 0,
+//       y: 10,
+//     },
+//     animate: {
+//       opacity: 1,
+//       y: 0,
+//     },
+//     exit: {
+//       opacity: 0,
+//       y: -10,
+//     },
+//     className: cn(open && 'text-fd-popover-foreground'),
+//   };
 
-  return (
-    <CollapsibleTrigger
-      className={cn(
-        'flex w-full h-8.5 items-center text-sm text-fd-muted-foreground gap-2.5 px-2 text-start focus-visible:outline-none [&_svg]:size-4',
-        className,
-      )}
-      data-toc-popover-trigger=""
-      {...props}
-    >
-      <ProgressCircle
-        value={(items.findLastIndex((item) => item.active) + 1) / Math.max(1, items.length)}
-        max={1}
-        className={cn('shrink-0', open && 'text-fd-primary')}
-      />
-      <AnimatePresence mode="wait">
-        {items[selectedIdx] && !open ? (
-          <motion.span key={selectedIdx} {...spanProps}>
-            {items[selectedIdx].original.title}
-          </motion.span>
-        ) : path ? (
-          <motion.span key={path.$id ?? ':pathId'} {...spanProps}>
-            {path.name}
-          </motion.span>
-        ) : (
-          <motion.span key=":toc" {...spanProps}>
-            {text.toc}
-          </motion.span>
-        )}
-      </AnimatePresence>
+//   return (
+//     <CollapsibleTrigger
+//       className={cn(
+//         'flex w-full h-8.5 items-center text-sm text-fd-muted-foreground gap-2.5 px-2 text-start focus-visible:outline-none [&_svg]:size-4',
+//         className,
+//       )}
+//       data-toc-popover-trigger=''
+//       {...props}
+//     >
+//       {/* <ProgressCircle
+//         value={(items.findLastIndex((item) => item.active) + 1) / Math.max(1, items.length)}
+//         max={1}
+//         className={cn('shrink-0', open && 'text-fd-primary')}
+//       /> */}
+//       {/* <AnimatePresence mode='wait'>
+//         {items[selectedIdx] && !open ? (
+//           <motion.span key={selectedIdx} {...spanProps}>
+//             {items[selectedIdx].original.title}
+//           </motion.span>
+//         ) : path ? (
+//           <motion.span key={path.$id ?? ':pathId'} {...spanProps}>
+//             {path.name}
+//           </motion.span>
+//         ) : (
+//           <motion.span key=':toc' {...spanProps}>
+//             {text.toc}
+//           </motion.span>
+//         )}
+//       </AnimatePresence> */}
 
-      <ChevronDown className={cn('ms-auto shrink-0 transition-transform', open && 'rotate-180')} />
-    </CollapsibleTrigger>
-  );
-}
+//       <ChevronDown className={cn('ms-auto shrink-0 transition-transform', open && 'rotate-180')} />
+//     </CollapsibleTrigger>
+//   );
+// }
 
-interface ProgressCircleProps extends Omit<ComponentProps<'svg'>, 'strokeWidth'> {
-  value: number;
-  strokeWidth?: number;
-  size?: number;
-  min?: number;
-  max?: number;
-}
+// interface ProgressCircleProps extends Omit<ComponentProps<'svg'>, 'strokeWidth'> {
+//   value: number;
+//   strokeWidth?: number;
+//   size?: number;
+//   min?: number;
+//   max?: number;
+// }
 
-function clamp(input: number, min: number, max: number): number {
-  if (input < min) return min;
-  if (input > max) return max;
-  return input;
-}
+// function clamp(input: number, min: number, max: number): number {
+//   if (input < min) return min;
+//   if (input > max) return max;
+//   return input;
+// }
 
-function ProgressCircle({
-  value,
-  strokeWidth = 1.5,
-  size = 18,
-  min = 0,
-  max = 100,
-  style,
-  ...restSvgProps
-}: ProgressCircleProps) {
-  const normalizedValue = clamp(value, min, max);
-  const radius = size / 2 - strokeWidth;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (normalizedValue / max) * circumference;
-  const circleProps = {
-    cx: size / 2,
-    cy: size / 2,
-    r: radius,
-    fill: 'none',
-    strokeWidth,
-  };
+// function ProgressCircle({
+//   value,
+//   strokeWidth = 1.5,
+//   size = 18,
+//   min = 0,
+//   max = 100,
+//   style,
+//   ...restSvgProps
+// }: ProgressCircleProps) {
+//   const normalizedValue = clamp(value, min, max);
+//   const radius = size / 2 - strokeWidth;
+//   const circumference = 2 * Math.PI * radius;
+//   const progress = (normalizedValue / max) * circumference;
+//   const circleProps = {
+//     cx: size / 2,
+//     cy: size / 2,
+//     r: radius,
+//     fill: 'none',
+//     strokeWidth,
+//   };
 
-  return (
-    <svg
-      role="progressbar"
-      viewBox={`0 0 ${size} ${size}`}
-      aria-valuenow={normalizedValue}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      style={{ width: size, height: size, ...style }}
-      {...restSvgProps}
-    >
-      <circle {...circleProps} className="stroke-current/25" />
-      <circle
-        {...circleProps}
-        stroke="currentColor"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference - progress}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        className="transition-all"
-      />
-    </svg>
-  );
-}
+//   return (
+//     <svg
+//       role='progressbar'
+//       viewBox={`0 0 ${size} ${size}`}
+//       aria-valuenow={normalizedValue}
+//       aria-valuemin={min}
+//       aria-valuemax={max}
+//       style={{ width: size, height: size, ...style }}
+//       {...restSvgProps}
+//     >
+//       <circle {...circleProps} className='stroke-current/25' />
+//       <circle
+//         {...circleProps}
+//         stroke='currentColor'
+//         strokeDasharray={circumference}
+//         strokeDashoffset={circumference - progress}
+//         strokeLinecap='round'
+//         transform={`rotate(-90 ${size / 2} ${size / 2})`}
+//         className='transition-all'
+//       />
+//     </svg>
+//   );
+// }
 
 function PageTOCPopoverContent(props: ComponentProps<'div'>) {
   return (
-    <CollapsibleContent data-toc-popover-content="" {...props}>
-      <div className="flex flex-col px-2 max-h-[50vh]">{props.children}</div>
+    <CollapsibleContent data-toc-popover-content='' {...props}>
+      <div className='flex flex-col px-2 max-h-[50vh]'>{props.children}</div>
     </CollapsibleContent>
   );
 }

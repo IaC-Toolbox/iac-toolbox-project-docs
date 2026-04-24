@@ -129,12 +129,12 @@ export function DocsPage({
 export function EditOnGitHub(props: ComponentProps<'a'>) {
   return (
     <a
-      target="_blank"
-      rel="noreferrer noopener"
+      target='_blank'
+      rel='noreferrer noopener'
       {...props}
       className={cn(
         buttonVariants({
-          color: 'secondary',
+          variant: 'secondary',
           size: 'sm',
         }),
         'gap-1.5 not-prose',
@@ -143,8 +143,8 @@ export function EditOnGitHub(props: ComponentProps<'a'>) {
     >
       {props.children ?? (
         <>
-          <Edit className="size-3.5" />
-          <I18nLabel label="editOnGithub" />
+          <Edit className='size-3.5' />
+          <I18nLabel label='editOnGithub' />
         </>
       )}
     </a>

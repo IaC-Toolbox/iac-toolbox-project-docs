@@ -49,11 +49,11 @@ export function HomeLayout(props: HomeLayoutProps) {
     nav: { enabled: navEnabled = true } = {},
     slots: defaultSlots,
     children,
-    i18n: _i18n,
-    githubUrl: _githubUrl,
-    links: _links,
-    themeSwitch: _themeSwitch,
-    searchToggle: _searchToggle,
+    // i18n: _i18n,
+    // githubUrl: _githubUrl,
+    // links: _links,
+    // themeSwitch: _themeSwitch,
+    // searchToggle: _searchToggle,
     ...rest
   } = props;
   const { baseSlots, baseProps } = useProvider(props);

@@ -4,16 +4,19 @@ import { Search } from 'lucide-react';
 import { useSearchContext } from 'fumadocs-ui/contexts/search';
 import { useI18n } from 'fumadocs-ui/contexts/i18n';
 import { cn } from '../../../lib/cn';
-import { type ButtonProps, buttonVariants } from '../../../components/ui/button';
+// import { type ButtonProps, buttonVariants } from '../../../components/ui/button';
+import { buttonVariants } from '../../../components/ui/button';
+import type { VariantProps } from 'class-variance-authority';
 
-export interface SearchTriggerProps extends Omit<ComponentProps<'button'>, 'color'>, ButtonProps {
+export interface SearchTriggerProps
+  extends Omit<ComponentProps<'button'>, 'variant'>, VariantProps<typeof buttonVariants> {
   hideIfDisabled?: boolean;
 }
 
 export function SearchTrigger({
   hideIfDisabled,
   size = 'icon-sm',
-  color = 'ghost',
+  variant = 'ghost',
   ...props
 }: SearchTriggerProps) {
   const { setOpenSearch, enabled } = useSearchContext();
@@ -25,7 +28,7 @@ export function SearchTrigger({
       className={cn(
         buttonVariants({
           size,
-          color,
+          variant,
         }),
         props.className,
       )}

@@ -39,9 +39,9 @@ export function ThemeSwitch({ className, mode = 'light-dark', ...props }: ThemeS
     return (
       <button
         className={container}
-        aria-label={`Toggle Theme`}
+        aria-label={'Toggle Theme'}
         onClick={() => setTheme(value === 'light' ? 'dark' : 'light')}
-        data-theme-toggle=""
+        data-theme-toggle=''
       >
         {full.map(([key, Icon]) => {
           if (key === 'system') return;
@@ -49,7 +49,7 @@ export function ThemeSwitch({ className, mode = 'light-dark', ...props }: ThemeS
           return (
             <Icon
               key={key}
-              fill="currentColor"
+              fill='currentColor'
               className={cn(itemVariants({ active: value === key }))}
             />
           );
@@ -61,7 +61,7 @@ export function ThemeSwitch({ className, mode = 'light-dark', ...props }: ThemeS
   const value = mounted ? theme : null;
 
   return (
-    <div className={container} data-theme-toggle="" {...props}>
+    <div className={container} data-theme-toggle='' {...props}>
       {full.map(([key, Icon]) => (
         <button
           key={key}
@@ -69,7 +69,7 @@ export function ThemeSwitch({ className, mode = 'light-dark', ...props }: ThemeS
           className={cn(itemVariants({ active: value === key }))}
           onClick={() => setTheme(key)}
         >
-          <Icon className="size-full" fill="currentColor" />
+          <Icon className='size-full' fill='currentColor' />
         </button>
       ))}
     </div>

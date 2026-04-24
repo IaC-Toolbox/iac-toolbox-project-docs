@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import { ChevronDown, ExternalLink } from 'lucide-react';
 import {
   type ComponentProps,
@@ -28,7 +29,7 @@ import scrollIntoView from 'scroll-into-view-if-needed';
 import { usePathname } from 'fumadocs-core/framework';
 import { ScrollArea, ScrollViewport } from '../ui/scroll-area';
 
-interface SidebarContext {
+interface SidebarContextInterface {
   open: boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   collapsed: boolean;
@@ -62,7 +63,7 @@ export interface SidebarProviderProps {
 
 type Mode = 'drawer' | 'full';
 
-const SidebarContext = createContext<SidebarContext | null>(null);
+const SidebarContext = createContext<SidebarContextInterface | null>(null);
 
 const FolderContext = createContext<{
   open: boolean;
@@ -110,7 +111,7 @@ export function SidebarProvider({
   );
 }
 
-export function useSidebar(): SidebarContext {
+export function useSidebar(): SidebarContextInterface {
   const ctx = use(SidebarContext);
   if (!ctx)
     throw new Error(
@@ -225,7 +226,7 @@ export function SidebarDrawerContent({ className, children, ...props }: Componen
     <Presence present={open}>
       {({ present }) => (
         <aside
-          id="nd-sidebar-mobile"
+          id='nd-sidebar-mobile'
           data-state={state}
           className={cn(!present && 'invisible', className)}
           {...props}
@@ -362,7 +363,7 @@ export function SidebarTrigger({ children, ...props }: ComponentProps<'button'>)
   const { setOpen } = useSidebar();
 
   return (
-    <button aria-label="Open Sidebar" onClick={() => setOpen((prev) => !prev)} {...props}>
+    <button aria-label='Open Sidebar' onClick={() => setOpen((prev) => !prev)} {...props}>
       {children}
     </button>
   );
@@ -373,8 +374,8 @@ export function SidebarCollapseTrigger(props: ComponentProps<'button'>) {
 
   return (
     <button
-      type="button"
-      aria-label="Collapse Sidebar"
+      type='button'
+      aria-label='Collapse Sidebar'
       data-collapsed={collapsed}
       onClick={() => {
         setCollapsed((prev) => !prev);

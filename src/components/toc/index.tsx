@@ -12,7 +12,8 @@ export function useTOCItems(): Primitive.TOCItemType[] {
 
 export type TOCProviderProps = Primitive.AnchorProviderProps;
 
-export const { useActiveAnchor, useActiveAnchors, useItems } = Primitive;
+// export const { useActiveAnchor, useActiveAnchors, useItems } = Primitive;
+export const { useActiveAnchor, useActiveAnchors } = Primitive;
 
 export function TOCProvider({ toc, children, ...props }: TOCProviderProps) {
   return (

@@ -86,7 +86,7 @@ function SidebarContent({ ref: refProp, className, children, ...props }: Compone
     <Base.SidebarContent>
       {({ collapsed, hovered, ref: asideRef, ...rest }) => (
         <div
-          data-sidebar-placeholder=""
+          data-sidebar-placeholder=''
           className={cn(
             'sticky z-20 [grid-area:sidebar] pointer-events-none *:pointer-events-auto md:layout:[--fd-sidebar-width:268px] max-md:hidden',
             navMode === 'auto'
@@ -94,9 +94,9 @@ function SidebarContent({ ref: refProp, className, children, ...props }: Compone
               : 'top-(--fd-docs-row-2) h-[calc(var(--fd-docs-height)-var(--fd-docs-row-2))]',
           )}
         >
-          {collapsed && <div className="absolute start-0 inset-y-0 w-4" {...rest} />}
+          {collapsed && <div className='absolute start-0 inset-y-0 w-4' {...rest} />}
           <aside
-            id="nd-sidebar"
+            id='nd-sidebar'
             ref={mergeRefs(ref, refProp, asideRef)}
             data-collapsed={collapsed}
             data-hovered={collapsed && hovered}
@@ -132,7 +132,7 @@ function SidebarDrawer({
 }: ComponentProps<typeof Base.SidebarDrawerContent>) {
   return (
     <>
-      <Base.SidebarDrawerOverlay className="fixed z-40 inset-0 backdrop-blur-xs data-[state=open]:animate-fd-fade-in data-[state=closed]:animate-fd-fade-out" />
+      <Base.SidebarDrawerOverlay className='fixed z-40 inset-0 backdrop-blur-xs data-[state=open]:animate-fd-fade-in data-[state=closed]:animate-fd-fade-out' />
       <Base.SidebarDrawerContent
         className={cn(
           'fixed text-[0.9375rem] flex flex-col shadow-lg border-s end-0 inset-y-0 w-[85%] max-w-[380px] z-40 bg-fd-background data-[state=open]:animate-fd-sidebar-in data-[state=closed]:animate-fd-sidebar-out',
@@ -252,7 +252,7 @@ function SidebarFolderContent({
       )}
       {...props}
     >
-      <div className="flex flex-col gap-0.5 pt-0.5">{children}</div>
+      <div className='flex flex-col gap-0.5 pt-0.5'>{children}</div>
     </Base.SidebarFolderContent>
   );
 }
@@ -327,16 +327,16 @@ export function Sidebar({ banner, footer, components, collapsible = true, ...res
           children: (
             <>
               {navMode === 'auto' && (
-                <div className="flex justify-between">
+                <div className='flex justify-between'>
                   {slots.navTitle && (
-                    <slots.navTitle className="inline-flex items-center gap-2.5 font-medium" />
+                    <slots.navTitle className='inline-flex items-center gap-2.5 font-medium' />
                   )}
                   {nav?.children}
                   {collapsible && (
                     <SidebarCollapseTrigger
                       className={cn(
                         buttonVariants({
-                          color: 'ghost',
+                          variant: 'ghost',
                           size: 'icon-sm',
                           className: 'mt-px mb-auto text-fd-muted-foreground',
                         }),
@@ -369,7 +369,7 @@ export function Sidebar({ banner, footer, components, collapsible = true, ...res
               className={cn(
                 buttonVariants({
                   size: 'icon-sm',
-                  color: 'ghost',
+                  variant: 'ghost',
                   className: 'lg:hidden',
                 }),
               )}
@@ -388,7 +388,7 @@ export function Sidebar({ banner, footer, components, collapsible = true, ...res
                 className={cn(
                   buttonVariants({
                     size: 'icon-sm',
-                    color: 'ghost',
+                    variant: 'ghost',
                     className: 'ms-auto text-fd-muted-foreground',
                   }),
                 )}
@@ -415,7 +415,7 @@ export function Sidebar({ banner, footer, components, collapsible = true, ...res
                   className={cn(
                     buttonVariants({
                       size: 'icon-sm',
-                      color: 'ghost',
+                      variant: 'ghost',
                     }),
                     'text-fd-muted-foreground lg:hidden',
                     i === iconLinks.length - 1 && 'me-auto',
@@ -427,7 +427,7 @@ export function Sidebar({ banner, footer, components, collapsible = true, ...res
               ))}
               {slots.languageSelect && (
                 <slots.languageSelect.root>
-                  <Languages className="size-4.5 text-fd-muted-foreground" />
+                  <Languages className='size-4.5 text-fd-muted-foreground' />
                 </slots.languageSelect.root>
               )}
               {slots.themeSwitch && <slots.themeSwitch />}
@@ -462,10 +462,10 @@ function SidebarTabsDropdown({
 
   const item = selected ? (
     <>
-      <div className="size-9 shrink-0 empty:hidden md:size-5">{selected.icon}</div>
+      <div className='size-9 shrink-0 empty:hidden md:size-5'>{selected.icon}</div>
       <div>
-        <p className="text-sm font-medium">{selected.title}</p>
-        <p className="text-sm text-fd-muted-foreground empty:hidden md:hidden">
+        <p className='text-sm font-medium'>{selected.title}</p>
+        <p className='text-sm text-fd-muted-foreground empty:hidden md:hidden'>
           {selected.description}
         </p>
       </div>
@@ -485,10 +485,10 @@ function SidebarTabsDropdown({
           )}
         >
           {item}
-          <ChevronsUpDown className="shrink-0 ms-auto size-4 text-fd-muted-foreground" />
+          <ChevronsUpDown className='shrink-0 ms-auto size-4 text-fd-muted-foreground' />
         </PopoverTrigger>
       )}
-      <PopoverContent className="flex flex-col gap-1 w-(--radix-popover-trigger-width) p-1 fd-scroll-container">
+      <PopoverContent className='flex flex-col gap-1 w-(--radix-popover-trigger-width) p-1 fd-scroll-container'>
         {options.map((item) => {
           const isActive = selected && item.url === selected.url;
           if (!isActive && item.unlisted) return;
@@ -504,10 +504,10 @@ function SidebarTabsDropdown({
                 item.props?.className,
               )}
             >
-              <div className="shrink-0 size-9 md:mb-auto md:size-5 empty:hidden">{item.icon}</div>
+              <div className='shrink-0 size-9 md:mb-auto md:size-5 empty:hidden'>{item.icon}</div>
               <div>
-                <p className="text-sm font-medium leading-none">{item.title}</p>
-                <p className="text-[0.8125rem] text-fd-muted-foreground mt-1 empty:hidden">
+                <p className='text-sm font-medium leading-none'>{item.title}</p>
+                <p className='text-[0.8125rem] text-fd-muted-foreground mt-1 empty:hidden'>
                   {item.description}
                 </p>
               </div>

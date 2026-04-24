@@ -19,7 +19,7 @@ import { Languages } from 'lucide-react';
 import { LinkItem, type LinkItemType } from '../shared';
 import { motion } from 'motion/react';
 import { RemoveScroll } from 'react-remove-scroll';
-import { useSearchContext } from 'fumadocs-ui/contexts/search';
+// import { useSearchContext } from 'fumadocs-ui/contexts/search';
 import {
   SidebarProvider,
   Sidebar,
@@ -144,23 +144,23 @@ export function DocsLayout(props: DocsLayoutProps) {
           head: (
             <>
               {slots.navTitle && (
-                <slots.navTitle className="inline-flex items-center gap-2.5 text-sm font-semibold" />
+                <slots.navTitle className='inline-flex items-center gap-2.5 text-sm font-semibold' />
               )}
               {nav.children}
             </>
           ),
           tabDropdown: slots.tabDropdown && tabs.length > 0 && (
-            <slots.tabDropdown className="flex-1" tabs={tabs} />
+            <slots.tabDropdown className='flex-1' tabs={tabs} />
           ),
           tool: (
             <>
               {slots.languageSelect && (
                 <slots.languageSelect.root>
-                  <Languages className="size-4.5" />
+                  <Languages className='size-4.5' />
                 </slots.languageSelect.root>
               )}
               {slots.searchTrigger && (
-                <slots.searchTrigger.sm hideIfDisabled className="rounded-lg" />
+                <slots.searchTrigger.sm hideIfDisabled className='rounded-lg' />
               )}
               {slots.sidebar && (
                 <slots.sidebar.trigger
@@ -174,7 +174,7 @@ export function DocsLayout(props: DocsLayoutProps) {
                 />
               )}
               {slots.themeSwitch && (
-                <slots.themeSwitch className="p-1 h-full ms-1 rounded-xl bg-fd-muted *:rounded-lg" />
+                <slots.themeSwitch className='p-1 h-full ms-1 rounded-xl bg-fd-muted *:rounded-lg' />
               )}
             </>
           ),
@@ -184,7 +184,7 @@ export function DocsLayout(props: DocsLayoutProps) {
               <LinkItem
                 key={i}
                 item={item}
-                className={cn(buttonVariants({ size: 'icon-sm', color: 'ghost' }))}
+                className={cn(buttonVariants({ size: 'icon-sm', variant: 'ghost' }))}
                 aria-label={item.label}
               >
                 {item.icon}
@@ -217,7 +217,7 @@ export function NavigationPanel({
      */
     children?: (defaultChildren: ReactNode) => ReactNode;
   }) {
-  const { open } = useSearchContext();
+  // const { open } = useSearchContext();
   return (
     <motion.div
       {...props}
@@ -226,28 +226,29 @@ export function NavigationPanel({
         props.className,
       )}
       animate={
-        props.animate ?? {
-          scale: open ? 0.9 : 1,
-          translateY: open ? 20 : 0,
-          opacity: open ? 0.8 : 1,
+        props.animate ??
+        {
+          // scale: open ? 0.9 : 1,
+          // translateY: open ? 20 : 0,
+          // opacity: open ? 0.8 : 1,
         }
       }
     >
       {children(
         <>
-          <div className="flex flex-row items-center ps-2.5 p-1 gap-2 min-h-11">
+          <div className='flex flex-row items-center ps-2.5 p-1 gap-2 min-h-11'>
             {head}
-            <div id="flux-layout-slot" className="flex-1" />
+            <div id='flux-layout-slot' className='flex-1' />
           </div>
 
-          <div className="flex flex-row gap-1.5 overflow-x-auto overflow-y-hidden p-2 sm:p-1">
-            <div className="flex flex-row items-center gap-2 min-w-0 flex-1">{tabDropdown}</div>
+          <div className='flex flex-row gap-1.5 overflow-x-auto overflow-y-hidden p-2 sm:p-1'>
+            <div className='flex flex-row items-center gap-2 min-w-0 flex-1'>{tabDropdown}</div>
 
-            <div className="flex flex-row items-center text-fd-muted-foreground border-x px-0.5 empty:hidden">
+            <div className='flex flex-row items-center text-fd-muted-foreground border-x px-0.5 empty:hidden'>
               {link}
             </div>
 
-            <div className="flex flex-row items-center text-fd-muted-foreground empty:hidden">
+            <div className='flex flex-row items-center text-fd-muted-foreground empty:hidden'>
               {tool}
             </div>
           </div>
@@ -270,7 +271,7 @@ export function NavigationPanelOverlay({
           !enabled && 'pointer-events-none',
           className,
         )}
-        initial="hide"
+        initial='hide'
         variants={{
           show: {
             opacity: 1,
@@ -280,7 +281,7 @@ export function NavigationPanelOverlay({
           },
         }}
         animate={enabled ? 'show' : 'hide'}
-        exit="hide"
+        exit='hide'
         {...props}
       />
     </RemoveScroll>

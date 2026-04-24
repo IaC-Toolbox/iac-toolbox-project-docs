@@ -66,34 +66,34 @@ export function TOCItems({ ref, className, thumbBox = true, children, ...props }
         d += ` C ${upperX} ${top - 4} ${x} ${upperBottom + 4} ${x} ${top} L${x} ${bottom}`;
       }
 
-      if (item._step !== undefined) {
-        output.push(
-          <circle
-            key={`${i}-circle`}
-            cx={x}
-            cy={(top + bottom) / 2}
-            r="8"
-            className="fill-fd-primary"
-          />,
-          <text
-            key={`${i}-text`}
-            x={x}
-            y={(top + bottom) / 2}
-            textAnchor="middle"
-            alignmentBaseline="central"
-            dominantBaseline="middle"
-            className="fill-fd-primary-foreground font-medium text-xs leading-none font-mono"
-          >
-            {item._step}
-          </text>,
-        );
-      }
+      // if (item._step !== undefined) {
+      //   output.push(
+      //     <circle
+      //       key={`${i}-circle`}
+      //       cx={x}
+      //       cy={(top + bottom) / 2}
+      //       r="8"
+      //       className="fill-fd-primary"
+      //     />,
+      //     <text
+      //       key={`${i}-text`}
+      //       x={x}
+      //       y={(top + bottom) / 2}
+      //       textAnchor="middle"
+      //       alignmentBaseline="central"
+      //       dominantBaseline="middle"
+      //       className="fill-fd-primary-foreground font-medium text-xs leading-none font-mono"
+      //     >
+      //       {item._step}
+      //     </text>,
+      //   );
+      // }
 
       positions.push([top, bottom, x]);
     }
 
     output.unshift(
-      <path key="path" d={d} className="stroke-fd-primary" strokeWidth="1" fill="none" />,
+      <path key='path' d={d} className='stroke-fd-primary' strokeWidth='1' fill='none' />,
     );
 
     const itemLineLengths: [top: number, bottom: number][] = [];
@@ -151,86 +151,87 @@ export function TOCEmpty() {
   const { text } = useI18n();
 
   return (
-    <div className="rounded-lg border bg-fd-card p-3 text-xs text-fd-muted-foreground">
+    <div className='rounded-lg border bg-fd-card p-3 text-xs text-fd-muted-foreground'>
       {text.tocNoHeadings}
     </div>
   );
 }
 
-interface ThumbBoxInfo {
-  startIdx: number;
-  endIdx: number;
-  isUp: boolean;
-}
+// interface ThumbBoxInfo {
+//   startIdx: number;
+//   endIdx: number;
+//   isUp: boolean;
+// }
 
 function ThumbTrack({ computed, thumbBox }: { computed: ComputedSVG; thumbBox: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const previousRef = useRef<ThumbBoxInfo>(null);
-  const tocInfo = Primitive.useTOC();
+  // const previousRef = useRef<ThumbBoxInfo>(null);
+  // const tocInfo = Primitive.useTOC();
 
-  function calculate(items: Primitive.TOCItemInfo[]) {
-    const out: Record<string, string> = {};
-    const startIdx = items.findIndex((item) => item.active);
-    if (startIdx === -1) return out;
+  // function calculate(items: Primitive.TOCItemInfo[]) {
+  //   const out: Record<string, string> = {};
+  //   const startIdx = items.findIndex((item) => item.active);
+  //   if (startIdx === -1) return out;
 
-    const endIdx = items.findLastIndex((item) => item.active);
-    out['--track-top'] = `${computed.positions[startIdx][0]}px`;
-    out['--track-bottom'] = `${computed.positions[endIdx][1]}px`;
+  //   const endIdx = items.findLastIndex((item) => item.active);
+  //   out['--track-top'] = `${computed.positions[startIdx][0]}px`;
+  //   out['--track-bottom'] = `${computed.positions[endIdx][1]}px`;
 
-    if (thumbBox) {
-      let isUp = false;
-      if (previousRef.current) {
-        const prev = previousRef.current;
-        isUp =
-          prev.startIdx > startIdx ||
-          prev.endIdx > endIdx ||
-          (prev.startIdx === startIdx && prev.endIdx === endIdx && prev.isUp);
-      }
+  //   if (thumbBox) {
+  //     let isUp = false;
+  //     if (previousRef.current) {
+  //       const prev = previousRef.current;
+  //       isUp =
+  //         prev.startIdx > startIdx ||
+  //         prev.endIdx > endIdx ||
+  //         (prev.startIdx === startIdx && prev.endIdx === endIdx && prev.isUp);
+  //     }
 
-      previousRef.current = { startIdx, endIdx, isUp };
-      out['--offset-distance'] = isUp
-        ? `${computed.itemLineLengths[startIdx][0]}px`
-        : `${computed.itemLineLengths[endIdx][1]}px`;
-      out['--opacity'] = items[isUp ? startIdx : endIdx].original._step !== undefined ? '0' : '1';
-    }
+  //     previousRef.current = { startIdx, endIdx, isUp };
+  //     out['--offset-distance'] = isUp
+  //       ? `${computed.itemLineLengths[startIdx][0]}px`
+  //       : `${computed.itemLineLengths[endIdx][1]}px`;
+  //     out['--opacity'] = items[isUp ? startIdx : endIdx].original._step !== undefined ? '0' : '1';
+  //   }
 
-    return out;
-  }
+  //   return out;
+  // }
 
-  Primitive.useTOCListener((items) => {
-    const element = ref.current;
-    if (!element) return;
+  // Primitive.useTOCListener((items) => {
+  //   const element = ref.current;
+  //   if (!element) return;
 
-    for (const [k, v] of Object.entries(calculate(items))) {
-      element.style.setProperty(k, v);
-    }
-  });
+  //   for (const [k, v] of Object.entries(calculate(items))) {
+  //     element.style.setProperty(k, v);
+  //   }
+  // });
 
   return (
     <div
       ref={ref}
-      className="absolute top-0 inset-s-0"
+      className='absolute top-0 inset-s-0'
       style={{
         width: computed.width,
         height: computed.height,
-        ...calculate(tocInfo.get()),
+        // ...calculate(tocInfo.get()),
       }}
     >
       <svg
-        xmlns="http://www.w3.org/2000/svg"
+        xmlns='http://www.w3.org/2000/svg'
         viewBox={`0 0 ${computed.width} ${computed.height}`}
-        className="absolute transition-[clip-path]"
+        className='absolute transition-[clip-path]'
         style={{
           width: computed.width,
           height: computed.height,
-          clipPath: `polygon(0 var(--track-top,0), 100% var(--track-top,0), 100% var(--track-bottom,0), 0 var(--track-bottom,0))`,
+          clipPath:
+            'polygon(0 var(--track-top,0), 100% var(--track-top,0), 100% var(--track-bottom,0), 0 var(--track-bottom,0))',
         }}
       >
         {computed.content}
       </svg>
       {thumbBox && (
         <div
-          className="absolute size-1 bg-fd-primary rounded-full [offset-distance:var(--offset-distance,0)] opacity-(--opacity,0) transition-[opacity,offset-distance]"
+          className='absolute size-1 bg-fd-primary rounded-full [offset-distance:var(--offset-distance,0)] opacity-(--opacity,0) transition-[opacity,offset-distance]'
           style={{
             offsetPath: `path("${computed.d}")`,
           }}
@@ -273,7 +274,7 @@ export function TOCItem({
 
   return (
     <Primitive.TOCItem
-      href={item.url}
+      // href={item.url}
       {...props}
       className={cn(
         'prose relative py-1.5 text-sm scroll-m-4 text-fd-muted-foreground hover:text-fd-accent-foreground transition-colors wrap-anywhere data-[active=true]:text-fd-primary',
@@ -288,9 +289,9 @@ export function TOCItem({
     >
       {offset !== upperOffset && (
         <svg
-          xmlns="http://www.w3.org/2000/svg"
+          xmlns='http://www.w3.org/2000/svg'
           viewBox={`${Math.min(offset, upperOffset)} 0 ${Math.abs(upperOffset - offset)} 12`}
-          className="absolute -top-1.5 -z-1"
+          className='absolute -top-1.5 -z-1'
           style={{
             width: Math.abs(upperOffset - offset) + 1,
             height: 12,
@@ -299,10 +300,10 @@ export function TOCItem({
         >
           <path
             d={`M ${upperOffset} 0 C ${upperOffset} 8 ${offset} 4 ${offset} 12`}
-            stroke="black"
-            strokeWidth="1"
-            fill="none"
-            className="stroke-fd-foreground/10"
+            stroke='black'
+            strokeWidth='1'
+            fill='none'
+            className='stroke-fd-foreground/10'
           />
         </svg>
       )}
@@ -316,9 +317,9 @@ export function TOCItem({
           insetInlineStart: offset,
         }}
       />
-      {item._step !== undefined && (
+      {/* {item._step !== undefined && (
         <div
-          className="absolute flex items-center justify-center -translate-1/2 -z-1 size-4 font-mono font-medium text-xs bg-fd-muted text-fd-muted-foreground rounded-full leading-none"
+          className='absolute flex items-center justify-center -translate-1/2 -z-1 size-4 font-mono font-medium text-xs bg-fd-muted text-fd-muted-foreground rounded-full leading-none'
           style={{
             top: `calc(50% + ${(isFirst ? -0.75 : 0) + (isLast ? 0.75 : 0)} * var(--spacing))`,
             insetInlineStart: offset,
@@ -326,7 +327,7 @@ export function TOCItem({
         >
           {item._step}
         </div>
-      )}
+      )} */}
       {item.title}
     </Primitive.TOCItem>
   );
