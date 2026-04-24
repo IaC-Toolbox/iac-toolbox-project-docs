@@ -1,0 +1,21 @@
+---
+title: Provisioning SSL Termination for Web Application
+description: Compare SSL termination strategies using API Gateway, Application Load Balancer, and CloudFront for different application architectures
+author: Viktor Vasylkovskyi
+date: "2026-02-22"
+---
+
+
+**Previous:** [Terraform Modules Best Practices](./04-terraform-modules-best-practices)
+
+SSL termination is one of those steps that feels small but shapes your entire architecture. It is a common pattern to offload the SSL termination off your application, and instead make other cloud resource act as an SSL proxy. There are several ways to do it in AWS, and each comes with its own trade-offs. The “right” choice depends less on preference and more on the kind of traffic you're serving. In cloud, three resources can act as SSL termination: Load Balancer, a Content Delivery Network Origin, or an API Gateway.
+
+If you're building a pure REST API, [AWS API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html) is usually the simplest path. It handles SSL for you, integrates cleanly with Lambda or EC2, and keeps the moving parts to a minimum. The catch? It isn't great for serving frontend assets - you'll quickly notice limitations around caching and file delivery.
+
+Then there's the [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html). It works for both APIs and web apps, gives you full control, and is the most “production-ready” option. But it comes with overhead: more infrastructure, higher cost, and the expectation that you’ll eventually run multiple EC2 instances across multiple availability zones. ALB shines when your system is growing, but it's definitely not the lightest way to get started.
+
+This section walks through all three approaches. We will start with API Gateway for pure APIs and finally ALB for production-grade systems. By the end, you'll have a clear picture of how SSL termination fits into different architectures and which option makes sense for your next project.
+
+---
+
+**Previous:** [Terraform Modules Best Practices](./04-terraform-modules-best-practices) | **Next:** [Provision SSL Certificate](./06-provision-ssl-certificate)

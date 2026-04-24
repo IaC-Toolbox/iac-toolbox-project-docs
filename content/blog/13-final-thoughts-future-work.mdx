@@ -1,0 +1,89 @@
+---
+title: Infrastructure as Code Toolbox - Final Thoughts and Future Work
+description: Recap of the infrastructure journey and guidance on security enhancements, disaster recovery, and scaling strategies for production readiness
+author: Viktor Vasylkovskyi
+date: "2026-04-15"
+---
+
+
+**Previous:** [Load Testing Infrastructure](./12-load-testing-infrastructure)
+
+We have reached the end of this infrastructure journey. By now, you should have a solid understanding of how to provision and manage cloud infrastructure using Terraform. You've built a complete three-tier web application architecture on AWS, covering everything from networking and compute to security and data storage.
+
+As promised, we have delivered the following outputs:
+
+```sh
+domain_for_your_apps = http://www.your-domain.com
+database_endpoint = "postgres-db.cspuccciib8v.us-east-1.rds.amazonaws.com:5432"
+ec2_first_instance_ip_address = "3.222.64.160"
+ec2_second_instance_ip_address = "3.223.185.158"
+```
+
+Note, all of them are public, although your are in charge of protecting them. Use them at your own risk!
+
+## Next Steps
+
+I hope you enjoyed this hands-on journey through building infrastructure with Terraform on AWS. The goal was to provide you with a solid foundation that you can build upon.
+
+As you have seen from the load test, the infrastructure is far from production ready. It doesn't handle the load well, and lacks proper security in place. The missing production checklists are numerous, below I will list a few ideas for next steps you can take to enhance this infrastructure.
+
+### Security Enhancements
+
+There are several security issues with the current setup. Doesn't mean it is insecure by default, but when you pursue production readiness and certification like Service Organization Control 2 (SOC2), you need to address them. Here are some suggestions:
+
+#### Restrict Network Access
+
+This one is about the public accessibility of our resources. We don't need to expose everything to the internet:
+
+- Our RDS database is publicly accessible. In production it probably best to put it in private subnet, and allow access by ec2 instances only.
+- The Ec2 instances are in public subnet. Since we are using a load balancer, we can put them in private subnet, and allow access only from the load balancer.
+- We have exposed the SSH port (22) to the world and reuse same keys for both EC2 instances. In production, you should restrict access to known IPs and use different keys for each instance. Or use AWS Systems Manager (SSM) to access instances without SSH.
+
+#### Encryption
+
+Everything should be encrypted, both at rest and in transit:
+
+- The RDS database does not have encryption at rest enabled. In production, you should enable it.
+- Use encryption in transit - enforce HTTPS (We got this one right - using API Gateway and Load Balancer with HTTPS)
+
+#### Access Control (IAM)
+
+The current setup access sensitive resources too permissively:
+
+- Lock the root account and use IAM roles with least privilege. Currently we are using root account credentials in the Terraform provider which is not a best practice.
+- Use secrets management - no hardcoded secrets (We got this one right partially - using AWS Secrets Manager, but the secrets are injected via user data script which is not ideal, and is in plain text on the instance)
+
+### Disaster Recovery and Incident Response
+
+The above security enhancement will provide you good preventive controls, but you also need to prepare for the worst-case scenarios:
+
+#### Application Level Backups and Monitoring
+
+- Do periodic backups of your RDS database, and test the restore process.
+- Enable Application Logging, Monitoring and Alerting using services like [CloudWatch](https://aws.amazon.com/cloudwatch/) or [Grafana](https://grafana.com/).
+- Set up an Incident Response Plan using tools like [PagerDuty](https://www.pagerduty.com/).
+
+#### Cloud-Level Disaster Recovery
+
+- Use Infrastructure as Code (IaC) to quickly recreate your infrastructure in another region if needed (which we have done using Terraform).
+- Setup logging and monitoring for your infrastructure using [AWS CloudTrail](https://aws.amazon.com/cloudtrail/).
+- Enable logging for database, load balancer, and other services.
+
+### Performance and Scalability Improvements
+
+Finally, to go from startup with a few users to enterprise with millions of users, you need to ensure your infrastructure can scale and perform well under load:
+
+- Implementing auto-scaling for EC2 instances with [ECS](https://aws.amazon.com/ecs/)
+- Adding [Kubernetes](https://kubernetes.io/) for the orchestration of containers and quick scaling from 2 instances to more
+- Adding caching layers using services like [Redis](https://redis.io/) cache,
+- Using a Content Delivery Network (CDN) like [CloudFront](https://aws.amazon.com/cloudfront/) to serve static assets faster
+- Database optimization and read replicas for RDS
+- Using multiple availability zones (AZs) for high availability
+
+## Conclusion
+
+I encourage you to continue exploring and experimenting with Terraform and AWS. The possibilities are endless, and the skills you've gained here will serve you well in your infrastructure journey. Myself, I will continue expanding this guide with more advanced topics and real-world scenarios. Stay tuned for more!
+
+---
+
+**Previous:** [Load Testing Infrastructure](./12-load-testing-infrastructure)

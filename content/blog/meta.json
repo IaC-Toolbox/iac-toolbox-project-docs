@@ -1,0 +1,33 @@
+{
+  "pages": [
+    "hello",
+    "01-infrastructure-as-code-journey",
+    "02-deploying-ec2-instance-with-terraform",
+    "03-provision-dns-records-with-terraform",
+    "04-terraform-modules-best-practices",
+    "05-ssl-termination-overview",
+    "06-provision-ssl-certificate",
+    "07-api-gateway-ssl-termination",
+    "08-application-load-balancer-ssl",
+    "09-cloudfront-cdn-with-terraform",
+    "10-aws-secrets-manager",
+    "11-provisioning-postgresql-rds",
+    "12-load-testing-infrastructure",
+    "13-final-thoughts-future-work",
+    "v0-01-raspberry-pi-infrastructure-intro",
+    "v0-02-hardware-requirements",
+    "v0-03-raspberry-pi-os-setup",
+    "v0-04-ansible-base-software-setup",
+    "v0-05-configure-cloudflare-tunnel",
+    "v0-06-configure-github-runner",
+    "v0-07-docker-build-deployment",
+    "v0-08-managing-secrets",
+    "v0-09-managing-secrets-vault",
+    "v0-10-grafana-setup",
+    "v0-11-prometheus-metrics-setup",
+    "v0-12-logs-with-loki",
+    "v0-13-grafana-alerts",
+    "v0-14-grafana-pagerduty",
+    "v0-15-conclusion"
+  ]
+}
