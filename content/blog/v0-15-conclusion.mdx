@@ -1,0 +1,123 @@
+---
+title: Conclusion and Next Steps
+description: Summary and next steps for expanding your Raspberry Pi on-premises infrastructure
+author: Viktor Vasylkovskyi
+date: "2025-12-28"
+---
+
+**Previous:** [Grafana PagerDuty Integration](./v0-14-grafana-pagerduty)
+
+
+We have reached the end of this infrastructure journey! By now, you should have a complete on-premises infrastructure running on a Raspberry Pi. Let's review what you've accomplished and explore where to go from here.
+
+## Github Repository
+
+All the configuration files, Ansible playbooks, and automation scripts from this entire guide series are available in https://github.com/IaC-Toolbox/iac-toolbox-raspberrypi. Feel free to clone it and use it as a reference!
+
+## What You've Built
+
+Your Raspberry Pi now serves as:
+
+1. **Headless Server**: Running Raspberry Pi OS Lite with secure SSH access
+2. **Automated Infrastructure**: Configured via Ansible for reproducible, version-controlled setup
+3. **CI/CD Platform**: Self-hosted GitHub Actions runner for automated builds
+4. **Public Web Server**: Exposed securely via Cloudflare Tunnel with automatic HTTPS
+5. **Container Host**: Running Docker containers with automated deployment
+
+## Cost Comparison
+
+Let's talk numbers:
+
+**On-Premises (Raspberry Pi)**:
+- Hardware: $50-80 (one-time)
+- Electricity: ~$2-5/year
+- Domain: ~$10-15/year (optional)
+- **Total Year 1**: ~$70-100
+- **Total Year 2+**: ~$15-20/year
+
+**Cloud Equivalent**:
+- Compute (t3.small): ~$15-20/month
+- Load Balancer: ~$15-20/month
+- **Total per year**: ~$360-480/year
+
+**Savings**: ~$300-400 per year after the first year. The Pi pays for itself quickly!
+
+## Limitations and Trade-offs
+
+While this setup is powerful for personal projects, it's important to be aware of its limitations:
+
+**Availability**: Depends on your home internet and power. No built-in redundancy (if the power goes out, so does your server!).
+
+**Performance**: Limited by Raspberry Pi hardware. Not suitable for high-traffic applications.
+
+**Security**: You're responsible for all security updates and monitoring. No one else is watching your back here.
+
+**Scaling**: Difficult to scale horizontally. Adding more Pis requires manual setup (you can't just click a button like in the cloud).
+
+**Network**: Upload speeds limited by home internet connection. Great for personal projects, but not for serving content to thousands of users.
+
+## Improving Your Setup
+
+### Monitoring and Observability
+
+Add monitoring to track system health:
+- **Prometheus + Grafana**: Metrics and dashboards
+- **Uptime Kuma**: Simple uptime monitoring
+- **Portainer**: Docker container management UI
+
+### Backups
+
+Implement backup strategies:
+- Automated SD card backups
+- Git-based configuration backups
+- Database backups to cloud storage
+
+### High Availability
+
+For critical applications:
+- Add a second Raspberry Pi
+- Set up load balancing
+- Implement database replication
+
+### Security Hardening
+
+Strengthen security:
+- Configure firewall (ufw)
+- Set up fail2ban for SSH protection
+- Enable automatic security updates
+- Implement log monitoring
+
+## When to Move to Cloud
+
+Consider cloud infrastructure when you need:
+- **Global availability**: Low latency worldwide
+- **Auto-scaling**: Automatic capacity adjustments
+- **High availability**: 99.9%+ uptime guarantees
+- **Managed services**: Databases, caching, queues
+- **Team collaboration**: Multiple developers deploying
+
+## Learning Path
+
+This on-premises setup teaches fundamental infrastructure concepts that translate directly to cloud platforms. It's like learning to drive with a manual transmission - once you understand the basics, automatic transmission (cloud) becomes much easier!
+
+**Next Steps**: Check out the [Infrastructure as Code Toolbox](/docs/v1-beginner-infrastructure-as-code) to learn how to build similar infrastructure on AWS using Terraform.
+
+You'll find that many concepts carry over:
+- Configuration management (Ansible → cloud-init)
+- Container orchestration (Docker → ECS/EKS)
+- Networking (local → VPC)
+- CI/CD (GitHub Actions → same, but with cloud deployment)
+
+## Conclusion
+
+You've built real infrastructure that can host real applications. Whether you use this for personal projects, learning, or as a development environment, you now have the skills to manage servers, automate deployments, and understand how modern infrastructure works.
+
+The best part? Everything you've learned applies to cloud infrastructure too. You're not just running services on a Raspberry Pi—you're learning infrastructure engineering.
+
+I hope you enjoyed this hands-on journey through building on-premises infrastructure. The goal was to give you a solid foundation that you can build upon as your needs grow.
+
+**Happy hacking!**
+
+---
+
+**Previous:** [Grafana PagerDuty Integration](./v0-14-grafana-pagerduty)

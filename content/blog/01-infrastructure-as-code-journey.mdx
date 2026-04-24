@@ -1,0 +1,91 @@
+---
+title: Infrastructure as Code Toolbox - A Hands-On Terraform Journey Through AWS
+description: A comprehensive guide to building a three-tier web application infrastructure on AWS using Terraform, covering EC2, RDS, Route53, SSL/TLS, and more
+author: Viktor Vasylkovskyi
+date: "2026-01-15"
+---
+
+Infrastructure as Code is now a core skill for modern software engineers. Whether you're deploying a simple service or scaling a production system, you need infrastructure that is consistent, repeatable, and version-controlled. Terraform makes that possible.
+
+I originally came from a frontend-heavy background, and my first steps into AWS were through the console - clicking around, creating resources manually, and forgetting how I did it the next day. Terraform changed everything. It gave me a way to understand AWS through code, build mental models slowly, and create infrastructure I could share and reuse.
+
+## What you'll build
+
+![alt text](./images/three-tier-app.png)
+
+In this guide, we'll build a simple yet complete web application infrastructure on AWS using Terraform. We will build what is called a three-tier application, as in the diagram above. The three tiers are:
+
+1. **Presentation Tier**: This is the front door to your application. We'll set up an EC2 instance with a web server, assign it a static IP using Elastic IP, and map a domain name to it using Route53. We'll also enable HTTPS using API Gateway and a Load Balancer.
+2. **Application Tier**: This is where your application logic lives. In this guide, our EC2 instance will serve as both the web server and application server, running a simple web app that connects to the database.
+3. **Data Tier**: This is where your data is stored. We'll provision a managed PostgreSQL database using RDS and securely store database credentials using Secrets Manager.
+
+At the end of this guide, you will have Terraform code that provisions the following outputs:
+
+```sh
+domain_for_your_apps=
+ip_address_of_your_ec2_instance_one=
+ip_address_of_your_ec2_instance_two=
+database_endpoint=
+```
+
+The above outputs represent a fully functional web application infrastructure on AWS, all provisioned with Terraform. Specifically, you will learn how to:
+
+- Launch an [EC2](https://docs.aws.amazon.com/ec2/) instance inside your VPC
+- Assign a static IP with [Elastic IP](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html)
+- Add a domain with [Route53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html)
+- Enable HTTPS through [API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html) and [Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/what-is-load-balancing.html)
+- Store secrets safely with [Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html)
+- Setup a Database with [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Welcome.html)
+
+By the end, you'll have a clear picture of how AWS pieces fit together and how Terraform can manage them cleanly.
+
+Let's start from the basics and grow toward production: one file at a time.
+
+## Table of Contents
+
+This tutorial series is organized into the following guides:
+
+1. **[Deploying EC2 instance on AWS with Terraform](./02-deploying-ec2-instance-with-terraform)** - Set up your first EC2 instance with VPC, subnets, security groups, and SSH access
+2. **[Provision DNS Records with Terraform](./03-provision-dns-records-with-terraform)** - Configure Route53 DNS records and map your domain to EC2 instances
+3. **[Terraform Modules Best Practices](./04-terraform-modules-best-practices)** - Organize your Terraform code using modules for reusability and maintainability
+4. **[SSL Termination Overview](./05-ssl-termination-overview)** - Compare SSL termination strategies using API Gateway, ALB, and CloudFront
+5. **[Provision SSL Certificate](./06-provision-ssl-certificate)** - Request and validate SSL certificates using AWS Certificate Manager (ACM)
+6. **[API Gateway SSL Termination](./07-api-gateway-ssl-termination)** - Set up AWS API Gateway as SSL termination for REST APIs
+7. **[Application Load Balancer SSL](./08-application-load-balancer-ssl)** - Build a production-ready setup with ALB for SSL termination and load balancing
+8. **[CloudFront CDN with Terraform](./09-cloudfront-cdn-with-terraform)** - Configure CloudFront CDN for global content delivery with SSL/TLS
+9. **[AWS Secrets Manager](./10-aws-secrets-manager)** - Securely store and retrieve application secrets using AWS Secrets Manager
+10. **[Provisioning PostgreSQL RDS](./11-provisioning-postgresql-rds)** - Set up a managed PostgreSQL database using Amazon RDS
+11. **[Load Testing Infrastructure](./12-load-testing-infrastructure)** - Load test your infrastructure using k6 to measure performance
+12. **[Final Thoughts and Future Work](./13-final-thoughts-future-work)** - Recap and guidance on security, disaster recovery, and scaling for production
+
+## What this tutorial is not
+
+We are providing bare bones infrastructure for typical 3 layer application. This is not a tutorial on how to build secure, scalable, production ready infra. There are many more aspects to consider like monitoring, logging, autoscaling, backups, disaster recovery and so on. The goal here is to get you familiar with the core concepts of AWS and Terraform so you can build upon them.
+
+## 🧠 IaC Toolbox Demo — Running a Local SLM
+
+To demonstrate what this infrastructure setup can handle in practice, I built a small demo that runs a quantized Small Language Model (SLM) entirely on modest infrastructure - no GPUs and no managed AI services.
+
+The demo deploys a `FastAPI` service backed by `llama-cpp`, running a 0.5B-parameter model on plain CPU. The key point is not the model itself, but that the same lightweight infrastructure described in these docs is sufficient to run it reliably.
+
+### 👉 Demo repository:
+
+https://github.com/IaC-Toolbox/slm-llama-cpp-poc
+
+This setup is a good example of how far you can go with simple, well-structured infrastructure before needing GPUs, autoscaling, or managed AI platforms.
+
+## Code Repository
+
+This is infrastructure as code tutorial, so the code of the infrastructure is available in this [GitHub repository](https://github.com/IaC-Toolbox/iac-toolbox-project). Feel free to clone it and follow along!
+
+## Acknowledgements
+
+This guide was inspired by my own journey learning AWS and Terraform as a frontend developer. Special thanks to the Terraform and AWS communities for their excellent documentation and examples that made this possible.
+
+Throughout this guide, I am using the [Infragram](https://marketplace.visualstudio.com/items?itemName=infragram.infragram) VS Code extension to render diagrams directly from code comments. It helps visualize infrastructure components and their relationships, making it easier to understand complex setups. It is open source and free and is very reliable!
+
+Feel free to reach out on [@LinkedIn](https://www.linkedin.com/in/viktor-vasylkovskyi-708b1712b/) if you have any questions or feedback!
+
+---
+
+**Next:** [Deploying EC2 instance on AWS with Terraform](./02-deploying-ec2-instance-with-terraform)

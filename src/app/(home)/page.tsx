@@ -1,6 +1,5 @@
 'use client';
 
-import { Header } from '@/components/header';
 import { Hero } from '@/components/hero';
 import { ValueProposition } from '@/components/value-proposition';
 import { TargetAudience } from '@/components/target-audience';
@@ -14,7 +13,6 @@ import { Footer } from '@/components/footer';
 export default function Home() {
   return (
     <div className='min-h-screen'>
-      <Header />
       <main>
         <Hero sectionClassnames='' />
         <ValueProposition sectionClassnames='bg-secondary/30 dark:bg-secondary/30 border-t border-border/40' />

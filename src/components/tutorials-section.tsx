@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 
 // URLs
-const DOCS_URL = 'https://www.iac-toolbox.com/docs/v1-beginner-infrastructure-as-code';
+const DOCS_URL = '/docs';
 
 // Section text
 const SECTION_TITLE = '8 Comprehensive Tutorials';
