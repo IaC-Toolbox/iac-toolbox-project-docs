@@ -28,7 +28,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   const MDX = page.data.body;
 
   return (
-    <main className='container py-12'>
+    <main className='container py-12 px-4'>
       <Link
         href='/blog'
         className='inline-flex items-center gap-1 text-sm text-fd-muted-foreground hover:text-fd-foreground mb-8 transition-colors'
