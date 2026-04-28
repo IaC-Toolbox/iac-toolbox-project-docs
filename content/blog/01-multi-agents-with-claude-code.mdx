@@ -1,0 +1,113 @@
+---
+title: Multi-Agent Development with Claude Code - Part 1 - The Waterfall Agentic Workflow
+description: Instead of asking an agent for assistance, what if you handed it the full product spec and let it run? A first experiment in autonomous feature implementation — what worked, what didn't, and what we learned about worktrees and single vs multi agent approaches.
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+At some point after getting an AI agent working reliably on my Raspberry Pi, the natural next question became: how much can I actually delegate? Individual tasks, sure. But what about a full feature set — architecture, multiple repos, several weeks of work — handed off in one go?
+
+This is the first post in a three-part series on that experiment. The approach I'm testing is what I'm calling the waterfall agentic workflow. The idea is to front-load all the context — architecture, tech stack, product vision, roadmap — and let [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) handle everything from task generation to merged PRs, with me reviewing at the end rather than driving each step.
+
+This document registers my motivations and experiments with a new development approach. We are testing what I'm calling the waterfall agentic workflow. In this workflow I am attempting a novel approach to building features and products — instead of coding and asking the agent for assistance, I hand it a complete specification and let it run the whole implementation in one go. This is essentially a big chunk of work.
+
+## The idea
+
+For the complete view of the product to build I wrote the following artefacts for the agent:
+
+- Architecture — Repositories and System Design
+- Workflow — Development Workflow, how to validate each repository
+- Product Vision
+- Tech Stack — backend and frontend tech used
+- Roadmap — the detailed vision of the milestone to implement
+
+The hypothesis: if the agent has all of this context upfront, it can generate tasks, create GitHub issues, and implement features without me driving each step.
+
+## What works
+
+Given full context, we can use AI for:
+
+**1. Generating local tasks from context**
+
+The `skills/roadmap-to-tasks/SKILL.md` skill reads the roadmap and produces concrete task files. This worked well.
+
+**2. Creating GitHub issues from local tasks**
+
+Using `heartbeat-prompts/roadmap-tasks-to-issues.md` and `skills/issue-writing/SKILL.md`, the agent creates properly structured GitHub issues from those task files. Also worked well.
+
+**3. Running the main agent to execute tasks one by one**
+
+This is where it gets interesting — and where the real learnings came from.
+
+## Hitting permission issues
+
+I kept getting issues with permissions and having to approve things manually. Running `claude --dangerously-skip-permissions` bypassed this and the agent started working well and creating PRs.
+
+## How the agent works under the hood
+
+Under the hood, the agent spawns sub-agents to work on [git worktrees](https://git-scm.com/docs/git-worktree). A worktree is a way to check out multiple branches of the same repo simultaneously into separate directories — each sub-agent gets its own isolated copy of the codebase on its own branch, so they can work in parallel without stepping on each other. This guarantees isolation:
+
+```sh
+  (use "git restore --staged <file>..." to unstage)
+        new file:   .claude/worktrees/issue-69-validate-arm64
+        new file:   .claude/worktrees/issue-70-keyboard-navigation
+        new file:   .claude/worktrees/issue-71-help-command
+        new file:   .claude/worktrees/issue-72-device-type
+        new file:   .claude/worktrees/issue-73-ssh-config
+        new file:   .claude/worktrees/issue-74-scripts-folder
+        new file:   .claude/worktrees/issue-75-download-scripts
+        new file:   .claude/worktrees/issue-76-prerequisites
+        new file:   .claude/worktrees/issue-77-docker
+```
+
+Each issue gets its own worktree and its own sub-agent.
+
+## The worktree problem with single-agent sequential work
+
+Worktrees are good for parallelising agent work. However, I discovered that when using a single agent, sequential approach works better because one agent can then see the big picture. Sub agents seem to fail for the following reasons:
+
+- Isolated worktrees don't see related work
+- Sub agents lack all the context. The ticket context is not enough
+
+Hence, worktrees are good for general bug fixing (to validate in the future), where multiple implementations are unrelated and can be parallelised.
+
+Our scope though is different. We have a full spec of the product and want to kick start it from the ground up. Here it is preferable to run a single agent, which is what we ended up doing.
+
+The fix: force the agent to work alone in the skill. Instead of spawning parallel sub-agents for every issue, the skill instructs a single agent to work sequentially across all issues, maintaining the full picture throughout.
+
+## The agent makes mistakes
+
+The agent does make mistakes. It implements the code and opens PRs as expected, but the final behavior doesn't always match what was expected. I have to correct my agent.
+
+This raised a question: what if instead of just a writer, we also had a reviewer? An agent team with a reviewer and a worker? That's what the next post covers.
+
+## Closing the loop with skills
+
+From the bugs observed in the implementation, I created a skill to convert bugs into actionable tasks:
+
+- `.claude/skills/bug-creator/SKILL.md` — creates a bug ticket from a short description
+- `.claude/skills/feature-roadmap-executor/SKILL.md` — handles both bugs and features (renamed from the roadmap-only version)
+- `.claude/skills/feature-doc-creator/SKILL.md` — creates feature docs
+
+The loop this enables:
+
+1. Define features to implement with `.claude/skills/feature-doc-creator/SKILL.md`
+2. Implement them with `.claude/skills/implementation-orchestrator/SKILL.md`
+3. Create bug tickets with `.claude/skills/bug-creator/SKILL.md`
+4. Implement them with `.claude/skills/implementation-orchestrator/SKILL.md`
+
+Everything also moved under `.claude` in the repository to make the skills available as [slash commands](https://docs.anthropic.com/en/docs/claude-code/slash-commands) inside Claude Code.
+
+## What we learned from this first experiment
+
+- Full context upfront genuinely works — the agent can generate meaningful tasks from architecture docs and a roadmap
+- Worktrees are the right isolation mechanism for parallel independent work, but not for a sequential full-product build where the agent needs to see everything
+- Sub-agents without enough context fail in ways that are hard to debug — the ticket alone isn't enough
+- A single sequential agent with the full spec produces better results than parallel agents with fragmented context
+- Lint failures happen when the conventions doc doesn't explicitly say "run the linter and fix all errors before committing" — the agent follows instructions literally, not by inference
+
+The next post covers the writer/reviewer sub-agent loop — running a full orchestrator that spawns a writer, then a reviewer, then loops until the feature passes review.
+
+---
+
+**Next:** [Part 2 — Writer + reviewer sub-agent loop](./02-multi-agents-with-claude-code)

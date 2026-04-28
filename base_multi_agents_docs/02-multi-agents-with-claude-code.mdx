@@ -1,0 +1,191 @@
+---
+title: Multi-Agent Development with Claude Code - Part 2 - The Writer + Reviewer Sub-Agent Loop
+description: Nine features across two repos, implemented by an orchestrator that spawns a writer sub-agent per feature, then a reviewer, loops on failure, and merges on pass. What the orchestration actually looks like in practice.
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+Over the weekend, I brainstormed with Claude and landed on 9 features to implement. Each feature is self-contained and has clear success criteria. Today we experiment implementing them using Claude Code with a single orchestrator agent and a writer/reviewer sub-agent pair.
+
+## The agent structure
+
+We're using the Sub-Agents feature for this. The idea is that the orchestrator spawns sub-agents — a writer and a reviewer — and loops over the cycle until the feature is considered done.
+
+Two agent definitions in `.claude/agents/`:
+
+```sh
+.claude/agents/feature-writer.md
+.claude/agents/feature-reviewer.md
+```
+
+The orchestrator executes tasks using `heartbeat-prompts/feature-tasks-sequential-with-reviewer.md`. It reads a feature from an md file and orchestrates the writer and reviewer sub-agents.
+
+## What the orchestration actually looks like
+
+### Step 1 — The orchestrator splits features by repository
+
+The orchestrator first figures out which features belong to which repos:
+
+```sh
+  Found 9 features across 2 repos:
+  - iac-toolbox-cli: 01, 02, 03, 06, 07, 08, 09
+  - iac-toolbox-raspberrypi: 04, 05
+```
+
+### Step 2 — Creates integration branch
+
+```sh
+⏺ Bash(cd /Users/vvasylkovskyi/git/IaC-Toolbox/git/iac-toolbox-cli && git checkout feature/all-features && git pull origin feature/all-features && git checkout -b feat…)
+  ⎿  Already on 'feature/all-features'
+     Your branch is up to date with 'origin/feature/all-features'.
+```
+
+### Step 3 — Creates task files per feature
+
+For each feature, the orchestrator breaks it into tasks and writes them to `context/roadmap/features/tasks/`:
+
+```sh
+⏺ Write(~/git/IaC-Toolbox/context/roadmap/features/tasks/01-iac-toolbox-creds-tasks.md)
+  ⎿  Wrote 14 lines to ../../context/roadmap/features/tasks/01-iac-toolbox-creds-tasks.md
+       1 # Tasks: CLI Credential Management
+       2
+       3 Source: 01-iac-toolbox-creds.md
+       4 Repo: iac-toolbox-cli
+       5 Branch: feature/01-iac-toolbox-creds
+       6 Status: pending
+       7
+       8 ## Tasks
+       9
+      10 - [ ] 1. Create credentials module — Read/write INI-style credentials file at ~/.iac-toolbox/credentials with profile support and 600 permissions
+```
+
+### Step 4 — Spawns writer sub-agents, parallelising across repos
+
+Since it identified two repos, it can parallelise two writer sub-agents:
+
+```sh
+⏺ All task lists created. Two writer agents running in background:
+  - Feature 01 (credentials) → iac-toolbox-cli
+  - Feature 04 (dynamic architecture) → iac-toolbox-raspberrypi
+```
+
+```sh
+⏺ Feature 1/9: Credential Management (repo: iac-toolbox-cli) — 5 tasks planned. Spawning writer agent.
+
+⏺ Agent(Feature 01 writer: credentials)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+```
+
+### Step 5 — Writer finishes, orchestrator spawns reviewer
+
+```sh
+Agent "Feature 04 writer: arch selection" completed
+
+⏺ Feature 04 writer completed. Now spawning the reviewer and checking the PR state.
+
+⏺ Bash(gh pr view 7 --json baseRefName,headRefName,state,title)
+  ⎿  {
+       "baseRefName": "feature/all-features",
+       "headRefName": "feature/04-iac-toolbox-dynamic-architecture-selection",
+     … +3 lines
+
+⏺ Agent(Feature 04 reviewer: arch selection)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ Feature 04 PR #7 is open against feature/all-features as expected. Reviewer agent spawned.
+```
+
+### Step 6 — Review PASS: orchestrator merges
+
+```sh
+⏺ Agent "Feature 04 reviewer: arch selection" completed
+
+⏺ Feature 04 reviewer: PASS. All 5 tasks correctly implemented. Merging PR now.
+
+⏺ Bash(gh pr merge 7 --merge --delete-branch)
+  ⎿  From github.com:IaC-Toolbox/iac-toolbox-raspberrypi
+      * branch            feature/all-features -> FETCH_HEAD
+        28324aa..42bad3b  feature/all-features -> origin/feature/all-features
+```
+
+### Step 7 — Review FAIL: orchestrator spawns another writer to fix
+
+```sh
+⏺ Agent(Feature 05 reviewer: script simplify)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ Waiting for two background agents:
+  - Feature 01 writer (iteration 2, fixing review issues) — iac-toolbox-cli
+  - Feature 05 reviewer — iac-toolbox-raspberrypi
+
+Completed so far:
+  - Feature 04 — merged into feature/all-features (raspberrypi)
+  - Feature 01 — in review/fix cycle (CLI)
+  - Feature 05 — in review (raspberrypi)
+  - Features 02, 03, 06, 07, 08, 09 — queued
+```
+
+Then once the fix writer finishes, it pushes and creates a new PR:
+
+```sh
+⏺ Agent "Feature 05 writer fix: stale refs" completed
+
+⏺ Feature 05 writer iteration 2 done. Pushing and creating PR.
+```
+
+### Step 8 — Loop continues until all features complete
+
+```sh
+⏺ Agent "Feature 02 writer: wizard redesign" completed
+
+⏺ Feature 02 writer done. Pushing and spawning reviewer.
+
+⏺ Bash(git checkout feature/02-iac-toolbox-wizard-redesign && git push origin feature/02-iac-toolbox-wizard-redesign)
+
+⏺ Agent(Feature 02 reviewer: wizard redesign)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+```
+
+## The actual PRs
+
+The PRs exist:
+
+```sh
+https://github.com/IaC-Toolbox/iac-toolbox-raspberrypi/pull/7
+https://github.com/IaC-Toolbox/iac-toolbox-raspberrypi/pull/8
+```
+
+And the final summary:
+
+```sh
+⏺ Feature 05 merged. Both raspberrypi features (04, 05) are done.
+
+  Progress:
+  - Feature 04 (Dynamic Architecture) — merged
+  - Feature 05 (Script Simplification) — merged (PR #8)
+```
+
+## What went well and what didn't
+
+The agent built the features. I tested locally and it works pretty well. Honestly I didn't expect it to work so well.
+
+There are bugs though. Running the Install from CLI was not working, which I figure is my fault — I couldn't provide the validation criteria well enough to the agent since it involves UI testing. That's something to improve on my end.
+
+The lint failure is also most likely a writer mistake. The writer is told to follow `context/development/conventions.md` and run `context/development/testing-checklist.md`. If neither of those explicitly says "run the linter and fix all errors before committing", the writer will just implement the code and commit without ever running lint. It's not that the writer ignored the rule — the rule probably isn't there.
+
+The lesson: whatever you want the agent to do before committing, it needs to be written down explicitly. The agent follows instructions literally, not by inference.
+
+## What this pattern enables
+
+The orchestrator → writer → reviewer → merge loop is surprisingly robust. The key properties:
+
+- The orchestrator maintains the overall picture across all 9 features
+- Each writer sub-agent only needs to know about one feature
+- The reviewer catches mistakes before they land in the integration branch
+- Failures re-enter the loop rather than blocking everything
+
+The next post covers taking this pattern further — starting from a design document and using slash commands to run the whole thing with even less setup.
+
+---
+
+**Next:** [Part 3 — Design doc to prototype: 7 PRs in 90 minutes](./03-design-doc-to-prototype)

@@ -1,0 +1,102 @@
+---
+title: Multi-Agent Development with Claude Code — Conclusions & Reflections
+description: What we actually learned after running the writer/reviewer orchestrator loop in practice. The round-robin bottleneck, the specification gap, and whether this is the end game.
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+In [Part 1](./01-multi-agents-with-claude-code) we found that a single sequential agent with full context beats parallel agents with fragmented context. In [Part 2](./02-multi-agents-with-claude-code) we added the writer/reviewer loop so mistakes get caught before merging. In [Part 3](./03-multi-agents-with-claude-code) we ran the whole thing from a design doc to 7 merged PRs in 90 minutes. In [Part 4](./04-multi-agents-with-claude-code) we took the last remaining human out of the loop. No terminal window, no approvals, a Raspberry Pi watching a folder and producing PRs while I do something else.
+
+So what did we actually learn from running this in practice?
+
+## The mistakes that shaped the workflow
+
+**Worktrees broke the context.** The first thing I tried was spawning a separate sub-agent per issue, each isolated in its own [git worktree](https://git-scm.com/docs/git-worktree). Worktrees give each agent a clean copy of the repo on its own branch, which sounds great for isolation. The problem: when you're building a full product from scratch, the agents need to see each other's work. An isolated sub-agent working from a single ticket doesn't have enough context to make the right decisions. It doesn't know what the other agent just built. The parallel approach that's great for independent bug fixes is the wrong tool for a coherent product build.
+
+**The agent doesn't infer what isn't written down.** I was getting lint failures because the conventions doc didn't explicitly say "run the linter and fix all errors before committing. A non-zero exit is a hard failure." The agent follows instructions literally. If the rule isn't there, the step doesn't happen. This sounds obvious in retrospect but it cost me a few failed runs to figure out.
+
+**No reviewer meant no quality gate.** Without a second agent checking the writer's work, mistakes made it into the integration branch. The fix was adding a reviewer sub-agent to the loop — the orchestrator spawns a writer, the writer opens a PR, the orchestrator spawns a reviewer, and only on PASS does the PR merge. On FAIL, a new writer iteration starts.
+
+**Sub-agents need explicit validation contracts, not references to conventions files.** "Follow `conventions.md`" is not specific enough. The `CLAUDE.md` pattern — a generated file at the root of the repo with exact validation commands and a testing checklist where every item must exit 0 — is what actually works.
+
+## The round-robin bottleneck
+
+The workflow works. But what I didn't fully anticipate is that I am the bottleneck.
+
+The loop right now looks like this: I write a specification, the orchestrator runs, PRs come back, I review them, I notice gaps, I write more specifications. Round and round. The agents are fast — genuinely faster than I expected. The slow part is me. Writing specs, reviewing output, identifying what's missing, writing more specs.
+
+This is not a complaint. It's just the honest shape of the workflow. The agents don't block on each other — they block on me.
+
+## The specification gap
+
+I notice it is not possible to write everything from start, at least by myself. There are always gaps. And agents don't fix gaps unless I specify them. They are very literal. If the spec says "implement credential management", and the spec doesn't mention error handling for missing directories, the agent doesn't add it. Not because it can't — because I didn't ask.
+
+For which I created a bug-creator skill, which to be honest is similar to `feature-doc-creator` — both are just loose specifications for the orchestrator loop to address. One for new work, one for fixing gaps. The workflow ends up being:
+
+1. Write feature spec
+2. Run orchestrator
+3. Test locally
+4. Find gaps
+5. Run `/bug-creator` with a short description
+6. Run orchestrator again on the bug
+7. Repeat
+
+It's not a failure. It's just how software gets built. The difference is I'm writing specs instead of writing code. Which is a meaningful shift — but it's still work.
+
+## Having a single agent perform the loop is enough
+
+Having single agent perform the loop is more than enough for me right now. I feel like a tech lead of a small team.
+
+The orchestrator holds the big picture. The writer does the implementation. The reviewer catches mistakes. I review the final PR. It's a surprisingly clean division of responsibility, and it largely holds up in practice. The places where it breaks down are the places where my spec was underspecified — which points back to me, not the agents.
+
+## What I am actually using worktrees for now
+
+In Part 1 I said worktrees broke the context for full-product builds. That's still true. But worktrees didn't disappear from my workflow — they just moved to a different layer.
+
+The way I work now: whenever I want to work on a different feature, I open a new terminal window and start a new Claude Code session. By convention, my coordinator agent does all its work inside a worktree. So each terminal window is working in its own isolated folder, on its own branch, with no knowledge of what the other sessions are doing.
+
+This is the right use of worktrees. Not parallel sub-agents all writing to different worktrees in one session — that's where the context problem was. But full session isolation between separate runs of the orchestrator, where each session has its own working directory, its own branch, and its own task file.
+
+The practical result: I can have one session implementing credential management on `feature/01-creds` while another is working on the wizard redesign on `feature/02-wizard`, and they cannot interfere with each other. If session one pushes a half-finished commit, session two never sees it. The integration branch is the only shared state, and nothing touches it until a PR is reviewed and merged.
+
+It's a simple convention but it removes a whole class of problems — the kind where two sessions both think they're on the same branch and one overwrites the other's work. Worktrees give you the isolation. The convention of one terminal window per feature gives you the workflow.
+
+## What going headless taught us
+
+[Part 4](./04-multi-agents-with-claude-code) took the workflow fully autonomous. No terminal window, no approvals, a Raspberry Pi watching a folder and producing PRs. It works. But running headlessly on a constrained device surfaces a different class of problems.
+
+### Resource management
+
+The Pi handles the writer/reviewer loop but CPU spikes noticeably when sub-agents are running. For longer sessions or more complex features this will become a real constraint. The missing piece is periodic cleanup — clearing temporary files, pruning old worktrees, keeping the disk and memory footprint under control between sessions. Something to build into the pipeline rather than handle manually.
+
+### Dropping feature docs manually.
+
+Right now I `scp` a markdown file into the watched folder and the pipeline picks it up. That works but it is one step away from what I actually want — which is to write a short description from my phone or from any device and have it land in the queue automatically. The wiring between "I have an idea" and "a feature doc exists on the Pi" is still manual. Future work is to connect that gap, whether through a simple webhook, a shared folder, or something else.
+
+### Single repo only.
+
+The current setup points the watcher at one repo. Every feature doc that lands gets processed against that same codebase. This is fine for a focused project but the natural extension is multi-repo support — each feature doc declares which repo it targets and the pipeline routes accordingly. The architecture already supports this; it is just not wired up yet.
+
+None of these are blockers. The headless setup runs and produces real output. But they are the honest list of what would need to change before I would call it production-ready.
+
+## Is this the end game?
+
+Honestly, probably not. But it's a real and useful step.
+
+Some time ago I read somewhere that AI only improves us one level up. It is true for this workflow. From a developer to a lead of a small team. I'm not writing code anymore — I'm writing specs, reviewing PRs, and directing agents. The cognitive work shifted from implementation to specification and review. Both are hard, just differently hard.
+
+The natural next question is: what does the next level up look like? If a developer becomes a tech lead, does a tech lead become an engineering manager? Does that mean writing even higher-level roadmaps and letting agents decompose them into specs? Maybe. The `design-doc-decomposer` skill is already a step in that direction — give it a design doc, get feature specs out.
+
+The limit I keep running into isn't the agents. It's the quality of my own specifications. The better I get at writing clear, complete, testable specs, the better the agents perform. Which means the skill that matters most right now isn't prompt engineering or agent orchestration — it's just being precise about what you want.
+
+That's probably the most honest conclusion from this whole experiment.
+
+---
+
+**The series:**
+
+- [Part 1 — The waterfall agentic workflow](./01-multi-agents-with-claude-code)
+- [Part 2 — The writer + reviewer sub-agent loop](./02-multi-agents-with-claude-code)
+- [Part 3 — Design doc to prototype: 7 PRs in 90 minutes](./03-multi-agents-with-claude-code)
+- [Part 4 — Headless mode on Raspberry Pi](./04-multi-agents-with-claude-code)
+- [Conclusions & Reflections](./05-multi-agents-with-claude-code)

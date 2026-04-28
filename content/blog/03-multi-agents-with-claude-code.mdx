@@ -1,0 +1,206 @@
+---
+title: Multi-Agent Development with Claude Code — Part 3 - Design Doc to Prototype
+description: Starting from a design document and running a slash command. The claude-md-generator, design-doc-decomposer, and implementation-orchestrator together produce 7 merged PRs in 90 minutes. What the workflow looks like, what the output was, and how to handle the bugs afterwards.
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+In [Part 1](./agents-01-waterfall-workflow) we established the right agent topology for full-product builds: a single sequential agent with full context, not parallel sub-agents with fragmented context. In [Part 2](./agents-02-writer-reviewer-loop) we added the writer/reviewer loop so mistakes get caught before hitting the integration branch. This post is the distillation of both — a clean workflow that takes a design document as input and produces a reviewed, merged codebase as output.
+
+This experiment attempts to convert a design doc into a fully working prototype. Ideal for small repos.
+
+## The slash command workflow
+
+All the skills from the previous posts are wired up as [slash commands](https://docs.anthropic.com/en/docs/claude-code/slash-commands) inside Claude Code. There are five in total:
+
+1. `/feature-doc-creator` — turns a short description or conversation into a structured feature doc the orchestrator can work from directly
+2. `/bug-creator` — turns a short bug description or error snippet into a self-contained bug task doc, enriched with repo context
+3. `/design-doc-decomposer` — reads a full design doc and produces structured feature files
+4. `/claude-md-generator` — scrapes the repo and generates `CLAUDE.md` with validation rules
+5. `/implementation-orchestrator` — implements all features or bugs, writer + reviewer loop, opens PRs
+
+This post focuses on the design-doc-to-prototype path, which runs through commands 3, 4, and 5. The rest of this post is what actually happened.
+
+## Step 1 — Produce roadmap features from the design doc
+
+```sh
+/design-doc-decomposer decompose this design doc .claude/context/design-doc/DESIGN_DOC.md. Use /Users/vvasylkovskyi/git/pd-static-assets repo for reference, as it has similar setup of publishing static assets to s3.
+```
+
+This produces a features list at `.claude/context/roadmap/features`. Each feature is a separate markdown file with enough context for the implementation orchestrator to work from.
+
+## Step 2 — Generate CLAUDE.md
+
+Before the implementation orchestrator runs, the sub-agents need to know how to validate their work. This is the problem we saw in Part 2 — when validation rules aren't explicit, agents skip steps. Every repo has its own programming language, build commands, and conventions. Rather than hardcoding these, the `claude-md-generator` skill scrapes the repo and generates a `CLAUDE.md` at the root:
+
+```sh
+/claude-md-generator
+```
+
+For my npm repo, the generated `CLAUDE.md` looked like this:
+
+```sh
+# Development Conventions
+
+## Branch Naming
+
+- `feat/<description>` — new features
+- `fix/<description>` — bug fixes
+- `docs/<description>` — documentation
+- `refactor/<description>` — code refactoring
+- `issue-<number>-<slug>` — issue-driven work
+
+## Commit Messages
+
+Format: `type: description`
+
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+
+Example: `feat: add ARM64 validation check`
+
+Include `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>` for AI-assisted commits.
+
+# Validation Commands
+
+Run in order. Stop and fix before continuing if any command fails.
+
+npm run lint
+npm run build
+
+# Testing Checklist
+
+All commands must exit 0. A non-zero exit code is a hard failure — do not commit, do not mark PASS.
+
+- [ ] Branch follows naming convention (`feat/`, `fix/`, `docs/`, `refactor/`, `issue-N-slug`)
+- [ ] Commits follow format (`type: description`)
+- [ ] No merge conflicts with base branch
+- [ ] TypeScript compiles without errors (`tsc --noEmit`)
+- [ ] ESLint passes with no errors
+- [ ] Build completes successfully (emails export to output/)
+```
+
+Very simple and efficient. The key part is that `CLAUDE.md` is the source of truth the sub-agents use for validation — what counts as done, what commands to run, and what a hard failure looks like.
+
+### Extract into context files
+
+Next, extract the workflow and testing checklist from `CLAUDE.md` into dedicated files the sub-agents can load:
+
+```sh
+.claude/context/testing-checklist.md
+.claude/context/workflow.md
+```
+
+These are what the feature writer and reviewer sub-agents reference when checking their own work.
+
+## Step 3 — Run the implementation orchestrator
+
+```sh
+/implementation-orchestrator implement features from .claude/context/roadmap/features.
+```
+
+Then sit back. Claude Code handles orchestrating development and review. Expect a mega branch and PRs to review.
+
+## What happened: 1h 30min, 117k tokens, 7 PRs
+
+```sh
+✶ Osmosing… (1h 22m 5s · ↓ 117.0k tokens)
+  ⎿  Tip: Use /clear to start fresh when switching topics and free up context
+```
+
+Final output:
+
+```sh
+  ---
+  🎉 Roadmap Execution Complete
+
+  Mode: features
+  Repo: /Users/vvasylkovskyi/git/pd-advance-email-builder-ui
+  Folder: .claude/context/roadmap/features
+
+  Results
+
+  ✅ 01-s3-terraform-infrastructure → PR #21 merged → feature/react-email-system
+  ✅ 02-package-structure-and-dependencies → PR #22 merged → feature/react-email-system
+  ✅ 03-email-export-pipeline → PR #23 merged → feature/react-email-system
+  ✅ 04-preview-server-dev-tooling → PR #24 merged → feature/react-email-system
+  ✅ 05-liquid-syntax-validation → PR #25 merged → feature/react-email-system
+  ✅ 06-ci-cd-circleci-pipeline → PR #26 merged → feature/react-email-system
+  ✅ 07-migrate-existing-templates → PR #27 merged → feature/react-email-system
+
+  Skipped: 0
+  Completed: 7
+  Failed: 0
+
+  ---
+  Final PR for Your Review
+
+  PR #28 → https://github.com/PagerDuty/pd-advance-email-builder-ui/pull/28
+
+  This PR consolidates all 7 features from the feature/react-email-system integration branch into main. It includes:
+
+  - Complete S3 infrastructure with Terraform
+  - Domain-based package structure with Continuum tokens
+  - Email export pipeline generating HTML, plaintext, and subject files
+  - Live preview server for development
+  - Liquid template validation with fixtures
+  - CircleCI CI/CD pipeline for automated deployments
+  - Template migration verification and future domain placeholders
+
+  Next steps:
+  1. Review PR #28
+  2. Deploy infrastructure via Atlantis (requires atlantis plan then atlantis apply)
+  3. Configure CircleCI context variables for deployment
+  4. Merge PR #28 to enable automated template deployments
+```
+
+7 features, 7 PRs merged into the integration branch, one final PR for review. Nobody is perfect, and your design doc was a big piece of work — AI will make mistakes. But as a starting point for a new project, this is genuinely impressive.
+
+## Handling bugs afterwards
+
+After testing locally you'll find issues. The workflow for fixing them:
+
+```sh
+/bug-creator - there is a bug: <paste error>
+```
+
+The bug-creator skill generates a structured bug ticket from a short description. No need to write anything fancy. Then:
+
+```sh
+/implementation-orchestrator
+```
+
+Same orchestrator, same writer/reviewer loop, now applied to bug tickets instead of feature files.
+
+## Troubleshooting: CLAUDE_CODE_MAX_OUTPUT_TOKENS
+
+One error I hit during long runs:
+
+```sh
+API Error: Claude's response exceeded the 2048 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable
+```
+
+The fix to include in your orchestrator prompt:
+
+```sh
+When encountering 'API Error: Claude's response exceeded the 2048 output token maximum', automatically break the task into smaller chunks and retry without asking for guidance. Create files incrementally using multiple Edit operations instead of one large Write/Edit. For documentation files, break into logical sections (max ~800 tokens per operation).
+```
+
+Adding this instruction means the agent handles the error itself rather than stopping and asking you what to do.
+
+## What this workflow is good for
+
+The design-doc-to-prototype pattern works best for:
+
+- New repos where you have a clear spec but haven't started yet
+- Small to medium repos where the full context fits in a single context window
+- Projects where you can write a decent design doc upfront
+
+It's less suited to large existing codebases where the agent needs to understand a lot of existing code to make correct changes. For those, the sequential single-agent approach from Part 1 with careful context scoping is better.
+
+The three slash commands together form a complete workflow from idea to reviewed, merged code. The time savings are real — 90 minutes for 7 features with writer/reviewer validation on every one.
+
+Running this in practice though surfaced something I hadn't fully anticipated — the workflow works, but I'm the bottleneck. The agents are fast. The slow part is me: writing specs, reviewing output, finding the gaps, writing more specs. And there are always gaps. The next post takes one more step: removing the terminal window entirely, deploying the whole pipeline on a Raspberry Pi, and letting it run while I do something else.
+
+---
+
+**Next:** [Part 4 — Headless mode on Raspberry Pi](./04-multi-agents-with-claude-code)

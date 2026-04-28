@@ -1,0 +1,94 @@
+---
+title: Building an Autonomous AI Development System on a Raspberry Pi - The Full Journey
+description: From a Pi that does nothing, to a system that reads your product roadmap and opens PRs while you sleep. A honest account of every mistake, dead end, and working pattern we found across six months of experiments.
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+I started this with a Raspberry Pi that had metrics, alerting, domain access, and secrets configured — a pretty neat device that did nothing. I got intrigued by the idea of an AI coding bot sitting on it, doing work for me. I don't have much time to build projects myself, so the idea of something building them while I sleep sounded very exciting.
+
+What followed was six months of experiments, dead ends, config rabbit holes, a bot that died silently overnight more than once, and eventually something that actually works. This post is the introduction to that whole journey — what we tried, what broke, what we learned, and where we landed.
+
+If you want to skip ahead to the working system, jump straight to the individual posts. But if you want to understand *why* things are set up the way they are, read this first.
+
+## The two series
+
+The journey splits into two natural phases:
+
+**Phase 1 — Running an AI agent on a Raspberry Pi**
+
+Getting a persistent, secure, reliable AI coding agent running on commodity hardware. This turned out to be harder than expected, mostly because of things that have nothing to do with AI — swap memory, systemd, missing npm dependencies, Discord pairing dances.
+
+1. [Secure setup on Raspberry Pi](./openclaw-01-secure-setup) — Security model before anything else: Docker scoping, GitHub fine-grained PAT, Anthropic spending caps
+2. [Installing & wiring up OpenClaw](./openclaw-02-installing-openclaw) — Node.js, the installer, fixing a missing Discord plugin, SSH tunnel, pairing
+3. [Performance & stability on Pi hardware](./openclaw-03-performance-stability) — Swap expansion, systemd, Grafana Loki logs, the bot that kept dying overnight
+4. [Delegating code to Codex via ACP & tmux](./openclaw-04-codex-delegation) — Multi-agent architecture, the arm64 binary fix, the filesystem mailbox protocol
+5. [Heartbeats, notifications & GitHub project workflow](./openclaw-05-heartbeats-notifications) — Wake triggers, check-agents.sh, Discord notifications, parallel agents from a single message
+6. [Obsidian vault & autonomous roadmap loop](./openclaw-06-obsidian-autonomous-loop) — Persistent memory, roadmap markdown to GitHub issues, the full autonomous loop
+
+**Phase 2 — Multi-agent development with Claude Code**
+
+With the Pi infrastructure working, we went further: instead of asking the agent for assistance, hand it a complete product specification and let it implement everything. Writer and reviewer sub-agents, orchestrators, and a workflow that goes from design doc to merged PRs.
+
+7. [The waterfall agentic workflow](./agents-01-waterfall-workflow) — Full context upfront, worktrees vs sequential single agent, what breaks when sub-agents lack context
+8. [The writer + reviewer sub-agent loop](./agents-02-writer-reviewer-loop) — Orchestrator spawning writers per feature, reviewer pass/fail cycles, parallel work across two repos
+9. [Design doc to prototype: 7 PRs in 90 minutes](./agents-03-design-doc-to-prototype) — Three slash commands, CLAUDE.md generation, the full run result
+
+## The mistakes, in order
+
+The honest version of this journey is mostly a list of things that didn't work.
+
+**The bot died silently overnight.** Repeatedly. No logs, no alerts, just silence on Discord. It turned out to be a combination of things: the DISCORD_BOT_TOKEN getting lost from the environment variable on restart, the Pi running out of swap memory and the OOM killer quietly taking things down, and no systemd watchdog to restart the process. The fix took three separate posts to get right.
+
+**Swap was at 99.9%.** Raspberry Pi OS allocates 200MB of swap by default. Running an LLM gateway, a Discord client, and a browser control server simultaneously on 4GB RAM needs more than that. The fix was straightforward — a 2GB swapfile with correct priority — but the priority part bit me too. The Pi was ignoring the big swapfile and hammering the tiny one because the priorities were set wrong.
+
+**ACP was unreliable on ARM64.** The Agent Communication Protocol between OpenClaw and Codex kept failing because the platform-specific binary for Linux ARM64 wasn't being pulled in automatically. Getting that fixed required clearing npm caches and installing the binary explicitly. Even after fixing it, ACP had enough open issues that we eventually pivoted to a simpler approach: a filesystem mailbox and tmux. OpenClaw writes a JSON task file, Codex reads it, does the work, writes results back. No session management, no pairing dance.
+
+**Sub-agents with isolated worktrees failed for full-product builds.** Worktrees are a great isolation mechanism when tasks are independent. They're the wrong approach when you're building a whole product from scratch and the agent needs to see everything. Isolated sub-agents working from ticket context alone made mistakes that a single agent with full context wouldn't make. We kept the worktrees for parallel independent bug fixes, and switched to a single sequential agent for full-product implementation.
+
+**The agent doesn't infer what isn't written down.** Lint failures, missing validation steps, incomplete git workflows — all of these happened because the instructions weren't explicit enough. "Follow conventions.md" is not the same as "run the linter and fix all errors before committing. A non-zero exit is a hard failure." The agent follows instructions literally. If the rule isn't there, the agent won't apply it.
+
+**Too much context loaded on every heartbeat tick.** Once we added an Obsidian vault for agent memory, the heartbeat tasks started pulling in enormous context on every run. Explicit "do not load" instructions in the heartbeat prompts are necessary — otherwise the agent loads everything it can see, which runs up token costs and hits context limits.
+
+**Codex finished and told nobody.** After getting Codex working in tmux, there was a gap: Codex would complete its work and sit there while OpenClaw had no idea. The fix was a wake trigger — a command Codex runs at the end of every task that fires an OpenClaw system event, which in turn triggers the heartbeat and the notification flow. Without the explicit wake trigger, you're left polling manually.
+
+## The pattern that works
+
+After all of this, the workflow that actually holds up is:
+
+**For ongoing autonomous work on a Pi:**
+
+- OpenClaw as the frontline coordinator, persistent on Pi via systemd, talking through Discord
+- Codex as the coding worker, spawned via `spawn-agent.sh` into a tmux session with a git worktree
+- A filesystem mailbox for communication between them
+- A heartbeat that checks for completed tasks and notifies on Discord
+- An Obsidian vault for business context and agent memory, synced via git
+- A GitHub project as the source of work items
+
+**For a concentrated build session from a design doc:**
+
+- Write the design doc, architecture, tech stack, and validation rules upfront
+- Run `/design-doc-decomposer` to extract features
+- Run `/claude-md-generator` to generate `CLAUDE.md` with repo-specific validation commands
+- Run `/implementation-orchestrator` and wait
+- Fix the bugs that come out with `/bug-creator` and another orchestrator run
+
+The two approaches are complementary. The Pi-based setup is for ongoing autonomous work. The Claude Code session approach is for concentrated builds where you want to go from spec to prototype in one go.
+
+## What this is not
+
+This is not a guide for enterprise production infrastructure. There is no high availability, no disaster recovery, no audit logging. The Pi setup is a personal development environment, not a production system.
+
+The multi-agent workflow also has real limits. It works well for new repos with a clear spec. It works less well for large existing codebases where the agent needs deep context to make safe changes. The instructions need to be explicit — agents follow them literally, not by inference. And you should expect to review the output and fix bugs, not treat it as a fire-and-forget system.
+
+But for the scope it was designed for — personal projects, new repos, a single developer who wants to get more done without always being at the keyboard — it genuinely works.
+
+## Where to start
+
+If you're setting up a Pi from scratch and want the full persistent agent setup, start with [Secure setup on Raspberry Pi](./openclaw-01-secure-setup) and follow the series in order.
+
+If you already have a working dev environment and want to try the multi-agent build workflow, start with [The waterfall agentic workflow](./agents-01-waterfall-workflow).
+
+If you just want to see what the end state looks like, read [Design doc to prototype: 7 PRs in 90 minutes](./agents-03-design-doc-to-prototype).
+
+All the mistakes are documented. All the fixes are in the posts. Nothing is skipped.
