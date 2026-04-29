@@ -7,13 +7,6 @@ date: "2026-01-28"
 
 **Previous:** [Infrastructure as Code Journey](./01-infrastructure-as-code-journey)
 
----
-title: Deploying EC2 instance on AWS with Terraform
-description: Learn to provision your first EC2 instance on AWS with VPC, subnets, security groups, and SSH access using Terraform
-author: Viktor Vasylkovskyi
-date: "2026-01-28"
----
-
 import { File, Folder, Files } from 'fumadocs-ui/components/files';
 
 Provisioning a single EC2 instance might sound simple, but it already involves several essential AWS building blocks. Terraform makes those pieces clear, consistent, and repeatable. In this guide, we'll set up the networking, security, and configuration needed to launch an EC2 server entirely through code - building a solid foundation for everything that comes next.
@@ -21,9 +14,19 @@ Provisioning a single EC2 instance might sound simple, but it already involves s
 By the end of this guide, you will have a working EC2 instance on AWS that you can SSH into. Looking like this:
 ![Test](./images/core-web-app-provisioning-ec2-on-aws-with-terraform-architecture.png)
 
+
 ## Github Repository
 
 This guide full code is available in https://github.com/IaC-Toolbox/iac-toolbox-project/tree/main/v1-ec2-ssh. Feel free to clone it and follow along!
+
+## Recommended VS Code Extensions
+
+Before writing any Terraform code, install these two extensions to get syntax highlighting, auto-completion, and validation directly in your editor:
+
+- [HashiCorp HCL](https://marketplace.visualstudio.com/items?itemName=HashiCorp.HCL) — Syntax highlighting and language support for HashiCorp Configuration Language (HCL)
+- [HashiCorp Terraform](https://marketplace.visualstudio.com/items?itemName=HashiCorp.terraform) — Full Terraform language server with auto-complete, hover documentation, and validation
+
+![terraform extensions](./images/terraform_extensions_vs_code.png)
 
 ## Setting up AWS to obtain keys and AWS CLI
 
