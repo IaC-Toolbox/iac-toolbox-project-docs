@@ -1,0 +1,648 @@
+---
+title: Observability Vertical Part 2.5 - Service Alert Provisioning
+description: Every service and device that joins the network owns its own alert rules as part of its own Terraform. Here's the pattern, the contract, and a complete example for a Raspberry Pi host.
+author: Viktor Vasylkovskyi
+date: "2026-05-11"
+---
+
+*Series: Building a self-hosted observability stack from scratch*
+
+---
+
+In Part 2 we set up the alerting platform: PagerDuty, Grafana contact points, and notification policy. The routing infrastructure is ready — any alert that fires will reach the right person on call.
+
+Now the question is: **who writes the alert rules, and where do they live?**
+
+The answer this post argues for is: **each service owns its alerts.** Not a central "observability" repository that every team raises PRs against. Not a single monolithic alert file owned by the platform team. Each service or device that joins the monitoring network defines what "unhealthy" means for itself, and provisions those rules as part of its own infrastructure-as-code.
+
+---
+
+## Why service-owned alerts
+
+Consider what happens in the alternative. A central alerts repository works when you have one team and five services. It breaks down when:
+
+- A team wants to tune a threshold and has to PR into someone else's repo
+- A new service gets onboarded and alert coverage is an afterthought, added weeks later by the platform team
+- The platform team becomes a bottleneck for every alert change across the organisation
+- Different services need different thresholds for the same metric — a batch job at 90% CPU is fine, an API server at 90% CPU is on fire
+
+Service-owned alerts fix all of these. Each service team is responsible for the alert coverage of their service. When they deploy a new service, alert rules ship with it. When they need to tune a threshold, they change their own Terraform. The platform team's job is to publish the routing contract (Part 2) and stay out of the way.
+
+---
+
+## The model
+
+```
+terraform-observability-platform/   ← platform team owns this
+  └── notification policy, contact points, PagerDuty wiring
+
+terraform-raspberry-pi/             ← device/service team owns this
+  └── Node Exporter scraper config
+  └── alert rules for this device
+
+terraform-my-web-service/           ← service team owns this
+  └── application metrics config
+  └── alert rules for this service
+```
+
+Each service Terraform references the shared Grafana instance as a data source and provisions its own `grafana_rule_group` (or Mimir Ruler rules if you've done Part 1.5) into a folder namespaced to that service. The platform's notification policy routes anything that fires, regardless of which folder it came from.
+
+---
+
+## The onboarding contract
+
+When a new service or device joins the network, two things need to happen:
+
+**1. Install the scraper.** Node Exporter for a host, cAdvisor for containers, or application-specific instrumentation. This is what makes metrics available in Prometheus/Mimir. Without this, there's nothing to alert on.
+
+**2. Provision alert rules.** Define what "unhealthy" means for this service and push those rules as Terraform. This is what makes the metrics actionable.
+
+Both steps are the service team's responsibility, and both ship as part of the same infrastructure-as-code. A device is not considered "onboarded" until it has both.
+
+This is the same model used in production observability platforms at scale. At Datadog for example, each team owns their monitors in their own Terraform — the platform team owns the integration and routing, not the rules.
+
+---
+
+## Alert rule formats — choosing the right one
+
+Before writing rules, it's worth picking the format that fits your stack. There are three options:
+
+**`grafana_rule_group` (Terraform HCL)** — works with plain Prometheus from Part 1. Managed entirely via Terraform and the Grafana provider. The downside is verbosity: each rule is a three-stage query/reduce/threshold pipeline serialised into HCL with `jsonencode`. Around 60 lines per alert.
+
+**Prometheus rule YAML (file mount)** — the classic format. Simple, readable, the same syntax used everywhere in the Prometheus ecosystem. Requires mounting a file into the Prometheus container and triggering a reload. Less ergonomic for per-service provisioning since each service needs to manage a file on the Prometheus host.
+
+**Mimir Ruler YAML (API push)** — the best of both. Same simple YAML format as Prometheus rules, but pushed via HTTP API — no file mounts, no container access required. Each service pushes its rules to Mimir's Ruler endpoint as part of its own Terraform `apply`. This is the recommended format if you've done Part 1.5.
+
+For comparison, the same alert in each format:
+
+**grafana_rule_group (HCL):**
+```hcl
+rule {
+  name      = "HighCPUUsage"
+  condition = "C"
+
+  data {
+    ref_id         = "A"
+    relative_time_range { from = 600; to = 0 }
+    datasource_uid = data.grafana_data_source.prometheus.uid
+    model = jsonencode({
+      expr  = "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+      refId = "A"
+    })
+  }
+
+  data {
+    ref_id         = "B"
+    datasource_uid = "__expr__"
+    relative_time_range { from = 0; to = 0 }
+    model = jsonencode({ type = "reduce", refId = "B", expression = "A", reducer = "last" })
+  }
+
+  data {
+    ref_id         = "C"
+    datasource_uid = "__expr__"
+    relative_time_range { from = 0; to = 0 }
+    model = jsonencode({
+      type       = "threshold"
+      refId      = "C"
+      expression = "B"
+      conditions = [{ evaluator = { params = [90], type = "gt" }, type = "query" }]
+    })
+  }
+
+  no_data_state = "NoData"
+  for           = "5m"
+  labels        = { severity = "critical" }
+  annotations   = { summary = "High CPU on {{ $labels.instance }}" }
+}
+```
+
+**Mimir Ruler YAML:**
+```yaml
+- alert: HighCPUUsage
+  expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "High CPU on {{ $labels.instance }}"
+```
+
+The YAML is ~60 lines shorter and readable by anyone who knows PromQL. If you're on Mimir, use YAML. If you're on plain Prometheus, the `grafana_rule_group` HCL module wrapper shown later in this post brings the call-site verbosity down significantly.
+
+---
+
+## Example: Raspberry Pi host onboarding
+
+A Raspberry Pi running Node Exporter and Docker containers is a complete example of the service onboarding pattern. It has host metrics (CPU, memory, disk, temperature) and container metrics (cAdvisor), each with their own alert concerns.
+
+### Project structure
+
+```
+terraform-raspberry-pi/
+├── main.tf                    # Providers, Grafana folder, alert rules
+├── variables.tf
+├── terraform.tfvars           # gitignored
+├── terraform.tfvars.example
+└── rules/
+    └── pi-alerts.yaml         # Mimir Ruler format (if on Mimir)
+```
+
+### Providers
+
+The service Terraform references the same Grafana instance as the platform Terraform, but it only creates resources scoped to this service — a dedicated folder and its own rule group.
+
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    grafana = {
+      source  = "grafana/grafana"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "grafana" {
+  url  = var.grafana_url
+  auth = "${var.grafana_admin_user}:${var.grafana_admin_password}"
+}
+
+# Reference the shared Prometheus datasource provisioned in Part 1
+data "grafana_data_source" "prometheus" {
+  name = "Prometheus"
+}
+
+# Service-scoped folder — keeps this service's alerts visually separated
+resource "grafana_folder" "pi_alerts" {
+  title = "Raspberry Pi"
+}
+```
+
+The notification policy in Part 2 applies to all alerts regardless of folder — a service creating its own folder doesn't need to touch routing.
+
+### Alert rules — `grafana_rule_group` approach
+
+If you're on plain Prometheus, use the `grafana_rule_group` resource. To keep call sites readable, wrap the boilerplate in a local `threshold_alert` module:
+
+`modules/threshold_alert/main.tf`:
+```hcl
+variable "name"           { type = string }
+variable "folder_uid"     { type = string }
+variable "datasource_uid" { type = string }
+variable "expr"           { type = string }
+variable "threshold"      { type = number }
+variable "comparator"     { type = string; default = "gt" }
+variable "for"            { type = string; default = "5m" }
+variable "severity"       { type = string; default = "critical" }
+variable "summary"        { type = string }
+variable "description"    { type = string; default = "" }
+variable "no_data_state"  { type = string; default = "NoData" }
+
+resource "grafana_rule_group" "this" {
+  name             = var.name
+  folder_uid       = var.folder_uid
+  interval_seconds = 60
+
+  rule {
+    name      = var.name
+    condition = "C"
+
+    data {
+      ref_id         = "A"
+      relative_time_range { from = 600; to = 0 }
+      datasource_uid = var.datasource_uid
+      model = jsonencode({ expr = var.expr, refId = "A" })
+    }
+
+    data {
+      ref_id         = "B"
+      datasource_uid = "__expr__"
+      relative_time_range { from = 0; to = 0 }
+      model = jsonencode({ type = "reduce", refId = "B", expression = "A", reducer = "last" })
+    }
+
+    data {
+      ref_id         = "C"
+      datasource_uid = "__expr__"
+      relative_time_range { from = 0; to = 0 }
+      model = jsonencode({
+        type       = "threshold"
+        refId      = "C"
+        expression = "B"
+        conditions = [{ evaluator = { params = [var.threshold], type = var.comparator }, type = "query" }]
+      })
+    }
+
+    no_data_state  = var.no_data_state
+    exec_err_state = "Alerting"
+    for            = var.for
+
+    labels      = { severity = var.severity }
+    annotations = {
+      summary     = var.summary
+      description = var.description
+    }
+  }
+}
+```
+
+With this module, each alert call site looks like:
+
+```hcl
+module "alert_node_down" {
+  source = "./modules/threshold_alert"
+
+  name           = "NodeDown"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "up{job=\"node\",instance=\"raspberry-pi\"}"
+  threshold      = 1
+  comparator     = "lt"
+  for            = "2m"
+  severity       = "critical"
+  no_data_state  = "Alerting"
+  summary        = "Raspberry Pi is offline"
+  description    = "No scrape data for more than 2 minutes. The Pi may be down or unreachable."
+}
+
+module "alert_high_memory" {
+  source = "./modules/threshold_alert"
+
+  name           = "HighMemoryUsage"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "(1 - (node_memory_MemAvailable_bytes{instance=\"raspberry-pi\"} / node_memory_MemTotal_bytes{instance=\"raspberry-pi\"})) * 100"
+  threshold      = var.memory_critical_threshold
+  for            = "5m"
+  severity       = "critical"
+  summary        = "High memory on Raspberry Pi"
+  description    = "Memory usage is above ${var.memory_critical_threshold}%"
+}
+
+module "alert_swap_in_use" {
+  source = "./modules/threshold_alert"
+
+  name           = "SwapInUse"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "node_memory_SwapUsed_bytes{instance=\"raspberry-pi\"}"
+  threshold      = 0
+  for            = "5m"
+  severity       = "warning"
+  summary        = "Swap in use on Raspberry Pi"
+  description    = "Physical memory may be exhausted. Check for memory leaks or reduce workload."
+}
+
+module "alert_low_disk" {
+  source = "./modules/threshold_alert"
+
+  name           = "LowDiskSpace"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "(1 - (node_filesystem_avail_bytes{instance=\"raspberry-pi\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"raspberry-pi\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"})) * 100"
+  threshold      = var.disk_critical_threshold
+  for            = "5m"
+  severity       = "critical"
+  summary        = "Low disk space on Raspberry Pi"
+}
+
+module "alert_high_cpu" {
+  source = "./modules/threshold_alert"
+
+  name           = "HighCPUUsage"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\",instance=\"raspberry-pi\"}[5m])) * 100)"
+  threshold      = var.cpu_critical_threshold
+  for            = "5m"
+  severity       = "warning"
+  summary        = "High CPU on Raspberry Pi"
+}
+
+# Temperature alert — specific to ARM/Pi hardware
+module "alert_cpu_temp" {
+  source = "./modules/threshold_alert"
+
+  name           = "HighCPUTemperature"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "node_hwmon_temp_celsius{instance=\"raspberry-pi\",chip=\"cpu_thermal\"}"
+  threshold      = 75
+  for            = "5m"
+  severity       = "critical"
+  summary        = "High CPU temperature on Raspberry Pi"
+  description    = "Thermal throttling occurs above 80°C. Check cooling and ambient temperature."
+}
+```
+
+### Container alerts
+
+Container alerts use cAdvisor metrics and follow the same module pattern:
+
+```hcl
+module "alert_container_restarting" {
+  source = "./modules/threshold_alert"
+
+  name           = "ContainerRestarting"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  # name!="" filters out the cAdvisor root cgroup
+  expr           = "increase(container_start_time_seconds{name!=\"\"}[5m])"
+  threshold      = 2
+  for            = "1m"
+  severity       = "critical"
+  summary        = "Container {{ $labels.name }} is restarting"
+  description    = "Container has restarted more than twice in 5 minutes — likely in a crash loop."
+}
+
+module "alert_container_oom" {
+  source = "./modules/threshold_alert"
+
+  name           = "ContainerOOMKill"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "increase(container_oom_events_total{name!=\"\"}[5m])"
+  threshold      = 0
+  for            = "0s"   # fire immediately — OOM already happened
+  no_data_state  = "NoData"
+  severity       = "critical"
+  summary        = "Container {{ $labels.name }} was OOM killed"
+  description    = "The kernel OOM killer terminated this container. Memory limit may be too low or there is a memory leak."
+}
+
+module "alert_container_high_memory" {
+  source = "./modules/threshold_alert"
+
+  name           = "ContainerHighMemory"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  # container_spec_memory_limit_bytes == 0 means no limit — filter those out
+  expr           = "(container_memory_usage_bytes{name!=\"\"} / container_spec_memory_limit_bytes{name!=\"\"}) * 100 > 0"
+  threshold      = 85
+  for            = "5m"
+  severity       = "warning"
+  summary        = "Container {{ $labels.name }} is near its memory limit"
+  description    = "Memory usage is above 85% of limit. An OOM kill is likely if this continues."
+}
+
+module "alert_container_cpu_throttled" {
+  source = "./modules/threshold_alert"
+
+  name           = "ContainerCPUThrottled"
+  folder_uid     = grafana_folder.pi_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "rate(container_cpu_cfs_throttled_seconds_total{name!=\"\"}[5m]) / rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]) * 100"
+  threshold      = 25
+  for            = "10m"   # sustained throttling — transient spikes are normal
+  severity       = "warning"
+  summary        = "Container {{ $labels.name }} is CPU-throttled"
+  description    = "More than 25% of CPU time is being throttled. Raise the container CPU limit or reduce load."
+}
+```
+
+### Alert rules — Mimir Ruler YAML approach
+
+If you've done Part 1.5 and are running Mimir, skip the `grafana_rule_group` entirely and push rule YAML directly to the Ruler. The rules are cleaner, the format is portable, and alert evaluation is decoupled from Grafana.
+
+`rules/pi-alerts.yaml`:
+
+```yaml
+groups:
+  - name: raspberry_pi_host
+    interval: 1m
+    rules:
+      - alert: NodeDown
+        expr: up{job="node",instance="raspberry-pi"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Raspberry Pi is offline"
+          description: "No scrape data for more than 2 minutes"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes{instance="raspberry-pi"} / node_memory_MemTotal_bytes{instance="raspberry-pi"})) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High memory on Raspberry Pi"
+
+      - alert: SwapInUse
+        expr: node_memory_SwapUsed_bytes{instance="raspberry-pi"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap in use on Raspberry Pi"
+          description: "Physical memory may be exhausted"
+
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{instance="raspberry-pi",fstype!~"tmpfs|overlay",mountpoint="/"} / node_filesystem_size_bytes{instance="raspberry-pi",fstype!~"tmpfs|overlay",mountpoint="/"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space on Raspberry Pi"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle",instance="raspberry-pi"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on Raspberry Pi"
+
+      - alert: HighCPUTemperature
+        expr: node_hwmon_temp_celsius{instance="raspberry-pi",chip="cpu_thermal"} > 75
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High CPU temperature on Raspberry Pi"
+          description: "Thermal throttling occurs above 80°C"
+
+  - name: raspberry_pi_containers
+    interval: 1m
+    rules:
+      - alert: ContainerRestarting
+        expr: increase(container_start_time_seconds{name!=""}[5m]) > 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting"
+          description: "More than 2 restarts in 5 minutes — likely a crash loop"
+
+      - alert: ContainerOOMKill
+        expr: increase(container_oom_events_total{name!=""}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} was OOM killed"
+          description: "Memory limit may be too low or there is a memory leak"
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 0 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is near its memory limit"
+
+      - alert: ContainerCPUThrottled
+        expr: rate(container_cpu_cfs_throttled_seconds_total{name!=""}[5m]) / rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is CPU-throttled"
+          description: "More than 25% of CPU time throttled — raise the container CPU limit"
+```
+
+Push to Mimir's Ruler via Terraform using a `null_resource`:
+
+```hcl
+resource "null_resource" "pi_alert_rules" {
+  triggers = {
+    rules_hash = filemd5("${path.module}/rules/pi-alerts.yaml")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      curl -s -X POST \
+        "${var.mimir_url}/prometheus/config/v1/rules/raspberry-pi" \
+        -H "Content-Type: application/yaml" \
+        --data-binary @${path.module}/rules/pi-alerts.yaml
+    EOT
+  }
+}
+```
+
+The `triggers` block ensures Terraform re-runs the push whenever the rule file changes — the hash changes, the `null_resource` is considered outdated, the provisioner re-executes.
+
+Verify rules are loaded in Mimir:
+
+```bash
+curl -s http://localhost:9009/prometheus/config/v1/rules/raspberry-pi \
+  | head -20
+```
+
+---
+
+## The minimal viable alert set per service
+
+When onboarding a new service, start with these. They cover the most common real incidents without generating noise:
+
+**For any host (Node Exporter):**
+
+| Alert | Signal | Severity |
+|---|---|---|
+| `NodeDown` | Host unreachable for 2+ minutes | critical |
+| `LowDiskSpace` | Disk over 90% — failure imminent | critical |
+| `SwapInUse` | Memory exhausted, spilling to disk | warning |
+| `HighMemoryUsage` | Memory over 95% | critical |
+
+**For any host running containers (cAdvisor):**
+
+| Alert | Signal | Severity |
+|---|---|---|
+| `ContainerOOMKill` | A container was killed — data may be lost | critical |
+| `ContainerRestarting` | Service in a crash loop | critical |
+| `ContainerHighMemory` | Container near its memory limit | warning |
+| `ContainerCPUThrottled` | Latency degradation in progress | warning |
+
+CPU and temperature alerts are valuable but tend to generate noise until thresholds are tuned for the specific workload. Add them after the baseline is stable.
+
+---
+
+## Variables
+
+`variables.tf` — thresholds are service-specific. A batch processing host and a web server might share the same alert names but use very different thresholds:
+
+```hcl
+variable "grafana_url" { type = string }
+variable "grafana_admin_user" { type = string; default = "admin" }
+variable "grafana_admin_password" { type = string; sensitive = true }
+
+# Optional — only needed for Mimir Ruler push
+variable "mimir_url" { type = string; default = "" }
+
+variable "memory_critical_threshold" { type = number; default = 95 }
+variable "cpu_critical_threshold"    { type = number; default = 90 }
+variable "disk_critical_threshold"   { type = number; default = 90 }
+```
+
+`terraform.tfvars.example`:
+
+```hcl
+grafana_url            = "http://localhost:3000"
+grafana_admin_user     = "admin"
+grafana_admin_password = "changeme"
+
+mimir_url = "http://localhost:9009"   # only if using Mimir Ruler
+
+# Pi-specific thresholds — tighter than a server because less headroom
+memory_critical_threshold = 90
+cpu_critical_threshold    = 85
+disk_critical_threshold   = 85
+```
+
+---
+
+## Applying service alerts
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+```
+
+Verify rules are visible in Grafana:
+
+```bash
+curl -s http://localhost:3000/api/v1/provisioning/alert-rules \
+  -u admin:changeme \
+  | jq '.[] | select(.folderUID != null) | {title: .title, folder: .folderUID}'
+```
+
+You should see the Pi alerts listed under the `raspberry-pi` folder.
+
+**Test end-to-end** by temporarily lowering a threshold:
+
+```hcl
+# terraform.tfvars
+disk_critical_threshold = 1
+```
+
+```bash
+terraform apply
+# Wait ~2 minutes for Grafana to evaluate
+# Check Grafana → Alerting → Alert rules → Raspberry Pi folder
+# LowDiskSpace should be in Firing state
+# Check PagerDuty — incident should appear
+```
+
+---
+
+## What's next
+
+Every device and service in your network now has a repeatable onboarding pattern: install the scraper, provision alert rules, and the platform handles routing to PagerDuty. Adding a new host means creating a new `terraform-<service-name>/` directory, copying the structure above, and running `terraform apply`.
+
+The threshold alerts in this post don't fully answer the question "are users being impacted?" — a node at 85% CPU might be fine or might be causing timeouts. That's the gap that SLO burn rate alerts address in Part 5.
+
+| Part | Topic | Status |
+|---|---|---|
+| 1 | Collecting metrics — Alloy, Prometheus, Node Exporter, cAdvisor, Grafana | ✅ Published |
+| 1.5 | Replacing Prometheus with Mimir — long-term storage, decoupled alerting | ✅ Published |
+| 2 | Alerting platform — PagerDuty, contact points, notification policy | ✅ Published |
+| 2.5 | Service alert provisioning — each service owns its own alert rules | ✅ This post |
+| 3 | Logs — Loki + Alloy | Planned |
+| 4 | Traces — Tempo + OpenTelemetry via Alloy | Planned |
+| 5 | SLOs — Sloth, burn rate alerts | Planned |
+
+---
+
+*All configs from this post are available at [github.com/iac-toolbox](https://github.com/iac-toolbox).*

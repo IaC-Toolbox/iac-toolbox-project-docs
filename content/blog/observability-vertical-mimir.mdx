@@ -1,0 +1,681 @@
+---
+title: Observability Vertical Part 1.5 - Replacing Prometheus with Grafana Mimir
+description: Upgrade your single-node metrics stack to Mimir monolithic mode — longer retention, decoupled alerting, and a migration path to HA without paying for Datadog
+author: Viktor Vasylkovskyi
+date: "2026-05-11"
+---
+
+*Series: Building a self-hosted observability stack from scratch*
+
+---
+
+In Part 1 we set up Prometheus as the metrics store. It works well and the operational overhead is low. But it has two limitations that matter once you're running something real:
+
+**Alerting is coupled to Grafana.** If Grafana goes down, alert evaluation stops. Your on-call doesn't get paged. For a homelab this is acceptable — for anything you care about at 2am, it isn't.
+
+**Storage is local disk only.** Prometheus writes to a local TSDB. If the disk fills up, if the machine dies, or if you want more than 30 days of history, you're either running out of road or bolting on Thanos.
+
+This post replaces Prometheus with **Grafana Mimir in monolithic mode** — a single-container drop-in that addresses both problems. Alloy's config barely changes. Grafana's config barely changes. But you gain a built-in Ruler that evaluates alert rules independently of Grafana, a built-in Alertmanager that routes to PagerDuty, and object storage for as much history as you want to pay S3 for.
+
+Mimir is what Grafana Cloud runs under the hood. The monolithic mode is the same binary, just running all components in one process. It's genuinely not much harder to run than Prometheus — and it's entirely free and open source.
+
+**One thing to be honest about upfront:** this post doesn't eliminate the single point of failure — it moves it. With Grafana-managed alerts, Grafana is the SPOF. After this post, Mimir is the SPOF. If Mimir goes down, the Ruler stops evaluating and the Alertmanager stops routing, same as before.
+
+What you do gain is a meaningfully narrower failure surface — Mimir has no UI, no plugins, no user sessions, none of the operational complexity that makes Grafana crash in practice — and critically, **you gain the path to actual HA**. Going from one Mimir instance to three is a `replication_factor: 3` config change. The Ruler uses ring-based leader election so only one instance evaluates each rule group at a time, but if it dies another takes over in seconds. That upgrade is the subject of a future post. This post sets the foundation for it.
+
+---
+
+## What changes and what doesn't
+
+| Component | Part 1 | After this post |
+|---|---|---|
+| Alloy | Scrapes, remote_writes to Prometheus | Same — remote_writes to Mimir instead |
+| Prometheus | Stores metrics, evaluates nothing | **Replaced by Mimir** |
+| Grafana | Queries Prometheus, evaluates alert rules | Queries Mimir, **alert rules move to Mimir Ruler** |
+| Alertmanager | Not present | **Built into Mimir**, routes to PagerDuty |
+| Node Exporter | Runs on host as systemd | Unchanged |
+| cAdvisor | Container metrics | Unchanged |
+
+The alert rules you wrote in Part 2 stay the same — the PromQL expressions don't change. The difference is *where* they're evaluated: Mimir's Ruler instead of Grafana's built-in engine. Grafana becomes a pure visualisation layer with no role in the alerting path.
+
+---
+
+## Why not just Thanos?
+
+Thanos is the other common answer to "Prometheus but with HA and long-term storage". It works by adding sidecar processes to your existing Prometheus instances and layering a query component on top. It's a good system but it keeps Prometheus in the picture — you're operating Prometheus *and* Thanos, and the Thanos Ruler is a separate component you have to run and wire up.
+
+Mimir replaces Prometheus entirely with a single binary that already includes the equivalent of Thanos Sidecar, Thanos Store, Thanos Query, Thanos Ruler, and a clustered Alertmanager. For a fresh setup or a clean migration, Mimir is simpler.
+
+---
+
+## Prerequisites
+
+Everything from Part 1, plus:
+
+- An S3-compatible object storage bucket — AWS S3, Cloudflare R2, Hetzner Object Storage, or MinIO running locally
+- Bucket credentials available as environment variables
+
+If you want to run fully local with no cloud dependency, MinIO is a drop-in S3-compatible store you can run as another Docker container. There's a MinIO setup at the end of this post for that case.
+
+---
+
+## How Mimir monolithic mode works
+
+In distributed mode, Mimir splits into ~10 separate components (distributor, ingester, querier, ruler, alertmanager, etc.) that scale independently. In monolithic mode, all of those components run in a single process behind `--target=all`.
+
+The replication and storage architecture is identical — data still flows through ingesters to object storage, the ruler still evaluates independently, the alertmanager is still clustered-capable. You're just not operating them as separate processes yet. If you later need to scale, you split the components out without changing anything upstream.
+
+For a single host or small fleet, monolithic mode is the right starting point. The operational overhead is comparable to running Prometheus.
+
+---
+
+## Project structure
+
+```
+~/.iac-toolbox/
+├── grafana-alloy/
+│   ├── docker-compose.yml
+│   └── config.alloy           # one line changes: remote_write URL
+├── mimir/
+│   ├── docker-compose.yml     # new
+│   └── mimir.yaml             # new
+├── grafana/
+│   ├── docker-compose.yml
+│   └── provisioning/
+│       ├── datasources/
+│       │   └── mimir.yml      # updated: points to Mimir
+│       └── alerting/
+│           └── alertmanager.yml  # new: tells Grafana to use Mimir's Alertmanager
+└── cadvisor/
+    └── docker-compose.yml     # unchanged
+```
+
+Prometheus is removed entirely. Everything else gets a targeted update.
+
+---
+
+## Mimir configuration
+
+Create `~/.iac-toolbox/mimir/mimir.yaml`:
+
+```yaml
+# Monolithic mode — all components in one process
+target: all
+
+# Multi-tenancy disabled for single-user self-hosted setup
+# All metrics go under the tenant ID "anonymous"
+multitenancy_enabled: false
+
+# ── Object storage ────────────────────────────────────────────────────────
+# Mimir uses object storage for three things:
+#   blocks     — compacted TSDB blocks (long-term metrics)
+#   ruler      — alert rule files
+#   alertmanager — alertmanager config and state
+#
+# All three can use the same bucket with different prefixes, or separate buckets.
+# Using one bucket with prefixes is simpler for a self-hosted setup.
+
+common:
+  storage:
+    backend: s3
+    s3:
+      bucket_name: ${MIMIR_S3_BUCKET}
+      endpoint: ${MIMIR_S3_ENDPOINT}       # e.g. s3.amazonaws.com or <accountid>.r2.cloudflarestorage.com
+      region: ${MIMIR_S3_REGION}
+      access_key_id: ${MIMIR_S3_ACCESS_KEY}
+      secret_access_key: ${MIMIR_S3_SECRET_KEY}
+
+blocks_storage:
+  s3:
+    bucket_name: ${MIMIR_S3_BUCKET}
+  tsdb:
+    dir: /data/tsdb                  # local WAL before flush to S3
+    retention_period: 13h            # how long to keep blocks locally before S3
+
+ruler_storage:
+  s3:
+    bucket_name: ${MIMIR_S3_BUCKET}
+  prefix: ruler/
+
+alertmanager_storage:
+  s3:
+    bucket_name: ${MIMIR_S3_BUCKET}
+  prefix: alertmanager/
+
+# ── Ingester ──────────────────────────────────────────────────────────────
+# replication_factor: 1 for single-node (no replication)
+# Raise to 3 when running multiple Mimir instances for HA
+ingester:
+  ring:
+    replication_factor: 1
+
+# ── Compactor ─────────────────────────────────────────────────────────────
+# Merges small TSDB blocks in object storage into larger ones over time.
+# Keeps query performance stable as data ages.
+compactor:
+  data_dir: /data/compactor
+
+# ── Limits ────────────────────────────────────────────────────────────────
+# Defaults are set for large multi-tenant deployments.
+# For a homelab you can relax ingestion limits to avoid 429s.
+limits:
+  ingestion_rate: 10000         # samples/sec — default 10000, fine for small setups
+  max_global_series_per_user: 0 # 0 = unlimited
+  out_of_order_time_window: 5m  # accept slightly out-of-order samples (useful for Alloy batching)
+
+# ── Ruler ─────────────────────────────────────────────────────────────────
+# The Ruler evaluates PromQL alert rules on a schedule, independently of Grafana.
+# Alert notifications go to the Alertmanager component (also built into this binary).
+ruler:
+  alertmanager_url: http://localhost:9009/alertmanager   # internal — same process
+
+# ── Alertmanager ──────────────────────────────────────────────────────────
+# Mimir's built-in Alertmanager receives firing alerts from the Ruler
+# and routes them to PagerDuty, email, or any other receiver.
+# Config is stored in object storage (alertmanager/ prefix) and can be
+# pushed via the API — see "Configuring Alertmanager" section below.
+alertmanager:
+  external_url: http://localhost:9009/alertmanager
+  enable_api: true              # enables the API to push alertmanager config
+
+# ── Server ────────────────────────────────────────────────────────────────
+server:
+  http_listen_port: 9009
+  log_level: warn               # reduce noise; set to info for debugging
+```
+
+A few things worth understanding here:
+
+`multitenancy_enabled: false` means all data is stored under the tenant `anonymous`. Mimir was designed for multi-tenant SaaS deployments where each customer's data is isolated. For a self-hosted single-user setup this is overhead you don't need. Disabling it means you don't have to pass an `X-Scope-OrgID` header on every request.
+
+`out_of_order_time_window: 5m` is worth setting. Alloy batches samples before remote_write, and network jitter can mean samples arrive slightly out of chronological order. Without this, Mimir silently drops those samples. Five minutes covers any realistic batching delay.
+
+The `ruler.alertmanager_url` pointing to `localhost:9009/alertmanager` is the Ruler talking to the Alertmanager component running in the same process. In distributed mode these would be separate hostnames.
+
+---
+
+## Mimir docker-compose
+
+`~/.iac-toolbox/mimir/docker-compose.yml`:
+
+```yaml
+services:
+  mimir:
+    image: grafana/mimir:latest
+    container_name: mimir
+    restart: unless-stopped
+    ports:
+      - "9009:9009"
+    volumes:
+      - ./mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir_data:/data
+    command:
+      - --config.file=/etc/mimir/mimir.yaml
+    environment:
+      - MIMIR_S3_BUCKET=${MIMIR_S3_BUCKET}
+      - MIMIR_S3_ENDPOINT=${MIMIR_S3_ENDPOINT}
+      - MIMIR_S3_REGION=${MIMIR_S3_REGION}
+      - MIMIR_S3_ACCESS_KEY=${MIMIR_S3_ACCESS_KEY}
+      - MIMIR_S3_SECRET_KEY=${MIMIR_S3_SECRET_KEY}
+    networks:
+      - monitoring
+
+volumes:
+  mimir_data:
+
+networks:
+  monitoring:
+    name: monitoring
+    external: true
+```
+
+Secrets are passed as environment variables sourced from a `.env` file — never hardcode credentials in `mimir.yaml` since it ends up in version control.
+
+Create `~/.iac-toolbox/mimir/.env` (gitignored):
+
+```bash
+MIMIR_S3_BUCKET=my-mimir-metrics
+MIMIR_S3_ENDPOINT=s3.amazonaws.com
+MIMIR_S3_REGION=eu-west-1
+MIMIR_S3_ACCESS_KEY=AKIA...
+MIMIR_S3_SECRET_KEY=...
+```
+
+---
+
+## Update Alloy — one line change
+
+The only change to Alloy's config is the `remote_write` URL. Everything else — scrape targets, relabeling, scrape intervals — stays identical.
+
+In `~/.iac-toolbox/grafana-alloy/config.alloy`, update:
+
+```hcl
+prometheus.remote_write "platform" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+    # No headers needed — multitenancy is disabled
+  }
+}
+```
+
+Previously this pointed to `http://prometheus:9090/api/v1/write`. Same protocol, different host and path. Alloy doesn't know or care that it's now talking to Mimir.
+
+---
+
+## Update Grafana datasource
+
+Update `~/.iac-toolbox/grafana/provisioning/datasources/mimir.yml`:
+
+```yaml
+apiVersion: 1
+datasources:
+  - name: Mimir
+    type: prometheus
+    url: http://mimir:9009/prometheus
+    isDefault: true
+    access: proxy
+    editable: false
+    jsonData:
+      httpMethod: POST
+      # Tells Grafana this is a Mimir/Cortex datasource — enables Ruler API integration
+      prometheusType: Mimir
+```
+
+The `/prometheus` path is Mimir's Prometheus-compatible query API. All existing Grafana dashboards (Node Exporter Full, cAdvisor, etc.) continue to work without modification — the PromQL dialect is identical.
+
+`prometheusType: Mimir` enables Grafana to talk to Mimir's Ruler API directly from the Alerting UI, so you can see rule evaluation status and firing state in Grafana without it being the evaluator.
+
+---
+
+## Configuring the Alertmanager
+
+Mimir's Alertmanager config is stored in object storage and pushed via API — not a mounted config file. This is actually cleaner for Terraform management: the config is an API resource, not a file on disk.
+
+The Alertmanager config format is identical to standalone Alertmanager. Push it via the Mimir API:
+
+```bash
+cat <<'EOF' > /tmp/alertmanager.yaml
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+
+  routes:
+    - matchers:
+        - severity = critical
+      receiver: pagerduty
+      group_wait: 0s
+      repeat_interval: 1h
+
+    - matchers:
+        - severity = warning
+      receiver: pagerduty
+      group_wait: 1m
+      repeat_interval: 8h
+
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'you@example.com'
+        from: 'alerts@example.com'
+        smarthost: 'smtp.example.com:587'
+
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - routing_key: '<your-pagerduty-integration-key>'
+        severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+        description: '{{ len .Alerts.Firing }} alert(s): {{ range .Alerts.Firing }}{{ .Labels.alertname }} {{ end }}'
+        details:
+          instance: '{{ .CommonLabels.instance }}'
+          environment: 'production'
+EOF
+
+# Push to Mimir's Alertmanager API
+curl -s -X POST http://localhost:9009/alertmanager/api/v1/alerts \
+  -H "Content-Type: application/yaml" \
+  --data-binary @/tmp/alertmanager.yaml
+```
+
+Verify it was accepted:
+
+```bash
+curl -s http://localhost:9009/alertmanager/api/v1/status | jq '.data.configJSON'
+```
+
+This is also what Terraform manages — see the Terraform section below.
+
+---
+
+## Loading alert rules into the Ruler
+
+Mimir's Ruler also accepts rules via API, in the same Prometheus rule YAML format. You push rule groups to a namespace (a logical grouping, like a folder):
+
+```bash
+cat <<'EOF' > /tmp/infra-rules.yaml
+groups:
+  - name: node_alerts
+    interval: 1m
+    rules:
+      - alert: NodeDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.instance }} is unreachable"
+          description: "No scrape data for more than 2 minutes"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High memory on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}%"
+
+      - alert: SwapInUse
+        expr: node_memory_SwapUsed_bytes > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap in use on {{ $labels.instance }}"
+
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint="/"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk on {{ $labels.instance }}"
+          description: "Disk usage is {{ $value | printf \"%.1f\" }}%"
+
+  - name: container_alerts
+    interval: 1m
+    rules:
+      - alert: ContainerRestarting
+        expr: increase(container_start_time_seconds{name!=""}[5m]) > 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting"
+
+      - alert: ContainerOOMKill
+        expr: increase(container_oom_events_total{name!=""}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} was OOM killed"
+
+      - alert: ContainerCPUThrottled
+        expr: rate(container_cpu_cfs_throttled_seconds_total{name!=""}[5m]) / rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is CPU throttled"
+          description: "{{ $value | printf \"%.1f\" }}% of CPU time is throttled"
+EOF
+
+# Push rules to Mimir under namespace "infrastructure"
+curl -s -X POST \
+  "http://localhost:9009/prometheus/config/v1/rules/infrastructure" \
+  -H "Content-Type: application/yaml" \
+  --data-binary @/tmp/infra-rules.yaml
+```
+
+Verify rules loaded:
+
+```bash
+curl -s http://localhost:9009/prometheus/config/v1/rules | jq 'keys'
+# → ["infrastructure"]
+
+# Check evaluation status
+curl -s http://localhost:9009/prometheus/api/v1/rules | jq '.data.groups[].name'
+```
+
+---
+
+## Managing everything with Terraform
+
+In Part 2 we used Terraform to manage `grafana_rule_group` resources — rules evaluated by Grafana's engine. With Mimir, rules live in the Ruler and Alertmanager config lives in the Alertmanager API. The Grafana provider has native support for both via Mimir-aware resources.
+
+Update `main.tf` to point alert rules at Mimir's Ruler instead of Grafana's engine:
+
+```hcl
+terraform {
+  required_providers {
+    grafana = {
+      source  = "grafana/grafana"
+      version = "~> 3.0"
+    }
+    pagerduty = {
+      source  = "PagerDuty/pagerduty"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "grafana" {
+  url  = var.grafana_url
+  auth = "${var.grafana_admin_user}:${var.grafana_admin_password}"
+}
+
+# Second provider alias pointing directly at Mimir for Ruler/Alertmanager resources
+provider "grafana" {
+  alias = "mimir"
+  url   = var.mimir_url    # http://localhost:9009
+  auth  = ""               # no auth on self-hosted Mimir
+}
+```
+
+Rule groups use the `mimir` provider alias — they go to Mimir's Ruler, not Grafana:
+
+```hcl
+resource "grafana_rule_group" "infrastructure" {
+  provider = grafana.mimir
+
+  name             = "Infrastructure Alerts"
+  folder_uid       = "infrastructure"   # namespace in Mimir's Ruler
+  interval_seconds = 60
+
+  rule {
+    name      = "NodeDown"
+    condition = "C"
+
+    data {
+      ref_id = "A"
+      relative_time_range { from = 300; to = 0 }
+      datasource_uid = "__mimir__"
+      model = jsonencode({
+        expr  = "up{job=\"node\"} == 0"
+        refId = "A"
+      })
+    }
+
+    # ... reduce and threshold stages same as Part 2
+
+    no_data_state = "Alerting"
+    for           = "2m"
+    labels        = { severity = "critical" }
+    annotations   = {
+      summary = "Node {{ $labels.instance }} is unreachable"
+    }
+  }
+
+  # ... remaining rules identical to Part 2
+}
+```
+
+The Alertmanager config as a Terraform resource:
+
+```hcl
+resource "grafana_mimir_alertmanager_config" "main" {
+  provider = grafana.mimir
+
+  # Same routing structure as Part 2's grafana_notification_policy
+  # but expressed as raw Alertmanager YAML
+  config_yaml = templatefile("${path.module}/templates/alertmanager.yaml.tftpl", {
+    pagerduty_key = local.pagerduty_enabled ? module.pagerduty[0].integration_key : ""
+    alert_email   = var.alert_email
+  })
+}
+```
+
+This means `terraform apply` now configures the Ruler rules and Alertmanager routing in Mimir directly — Grafana is only configured for dashboards and datasource provisioning.
+
+---
+
+## Starting the updated stack
+
+Stop Prometheus first, then start Mimir. Alloy and Grafana get a rolling restart to pick up the config changes:
+
+```bash
+# Stop Prometheus — Mimir replaces it
+cd ~/.iac-toolbox/prometheus && docker compose down
+
+# Start Mimir (joins the existing monitoring network)
+cd ~/.iac-toolbox/mimir && docker compose up -d
+
+# Restart Alloy so it picks up the new remote_write URL
+cd ~/.iac-toolbox/grafana-alloy && docker compose restart
+
+# Restart Grafana so it picks up the new datasource provisioning
+cd ~/.iac-toolbox/grafana && docker compose restart
+```
+
+Verify Mimir is healthy:
+
+```bash
+# Readiness check — returns "ready" when all components have started
+curl http://localhost:9009/ready
+
+# Ingestion check — push a test sample
+curl -s -X POST http://localhost:9009/api/v1/push \
+  -H "Content-Type: application/x-protobuf" \
+  --data-binary "$(printf '\x00')"
+# You'll get a 400 (malformed), which confirms the endpoint is reachable
+
+# Better ingestion check — query for recent data after a minute
+curl -s 'http://localhost:9009/prometheus/api/v1/query?query=node_cpu_seconds_total' \
+  | jq '.data.result | length'
+# Should return > 0 once Alloy has pushed a few scrapes
+```
+
+Check the Ruler is loaded and evaluating:
+
+```bash
+curl -s http://localhost:9009/prometheus/api/v1/rules \
+  | jq '.data.groups[] | {name: .name, rules: [.rules[].name]}'
+```
+
+Check Alertmanager is running:
+
+```bash
+curl -s http://localhost:9009/alertmanager/api/v1/status \
+  | jq '.data.uptime'
+```
+
+---
+
+## Local object storage with MinIO
+
+If you'd rather not use a cloud S3 bucket — or want the setup to work offline — MinIO is a self-hosted S3-compatible store that runs as a single Docker container.
+
+Add to `~/.iac-toolbox/minio/docker-compose.yml`:
+
+```yaml
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"    # S3 API
+      - "9001:9001"    # MinIO console UI
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    networks:
+      - monitoring
+
+volumes:
+  minio_data:
+
+networks:
+  monitoring:
+    name: monitoring
+    external: true
+```
+
+Create the bucket before starting Mimir:
+
+```bash
+cd ~/.iac-toolbox/minio && docker compose up -d
+
+# Install mc (MinIO client) or use the console at http://localhost:9001
+docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+docker exec minio mc mb local/mimir-metrics
+```
+
+Then update Mimir's `.env` to point at MinIO:
+
+```bash
+MIMIR_S3_BUCKET=mimir-metrics
+MIMIR_S3_ENDPOINT=minio:9000      # container name on the monitoring network
+MIMIR_S3_REGION=us-east-1         # MinIO ignores region but Mimir requires it
+MIMIR_S3_ACCESS_KEY=minioadmin
+MIMIR_S3_SECRET_KEY=minioadmin
+```
+
+And add `path_style: true` to the S3 config in `mimir.yaml` — MinIO uses path-style URLs, AWS uses virtual-hosted-style:
+
+```yaml
+common:
+  storage:
+    backend: s3
+    s3:
+      bucket_name: ${MIMIR_S3_BUCKET}
+      endpoint: ${MIMIR_S3_ENDPOINT}
+      access_key_id: ${MIMIR_S3_ACCESS_KEY}
+      secret_access_key: ${MIMIR_S3_SECRET_KEY}
+      insecure: true          # no TLS on local MinIO
+      path_style_access: true # required for MinIO
+```
+
+The full local stack is now completely free and self-contained: MinIO on `:9000`, Mimir on `:9009`, Grafana on `:3000`, all networked via Docker. No cloud accounts, no per-GB fees, no data leaving your machine.
+
+---
+
+## What you've gained
+
+**Alerting is decoupled from Grafana.** The Ruler evaluates rules on schedule and sends firing alerts to the Alertmanager — Grafana doesn't touch this path. If Grafana goes down, PagerDuty still gets paged.
+
+**Long-term storage.** Metrics older than Prometheus's local retention window now live in object storage indefinitely. S3 standard storage costs roughly $0.023/GB/month — a year of homelab metrics is a few dollars.
+
+**A migration path to HA.** When you're ready, you can run a second Mimir instance, set `replication_factor: 3`, and have genuinely HA ingestion and rule evaluation without changing anything in Alloy, Grafana, or your alert rules. That's the subject of a future post.
+
+---
+
+## What's next
+
+| Part | Topic | Status |
+|---|---|---|
+| 1 | Collecting metrics — Alloy, Prometheus, Node Exporter, cAdvisor, Grafana | ✅ Published |
+| 1.5 | Replacing Prometheus with Mimir — long-term storage, decoupled alerting | ✅ This post |
+| 2 | Alerting layer — Grafana alert rules, Mimir Ruler, PagerDuty via Terraform | ✅ Published |
+| 3 | Logs — Loki + Alloy | Planned |
+| 4 | Traces — Tempo + OpenTelemetry via Alloy | Planned |
+| 5 | SLOs — Sloth, burn rate alerts | Planned |
+
+---
+
+*All configs from this post are available at [github.com/iac-toolbox](https://github.com/iac-toolbox).*

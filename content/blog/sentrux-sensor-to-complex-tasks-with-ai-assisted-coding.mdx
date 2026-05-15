@@ -1,0 +1,39 @@
+---
+title: Sentrux - Using Architectural Sensor to improve quality of codebase in AI assisted coding
+description: How Sentrux improves reviewer loop
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+Our AI Agent is working autonomously and can implement a spec. But can we trust it with non-degrading the large codebase quality over time? Sure it can implement the spec, but how about:
+
+  - Reusing code right
+  - Ensuring modularity
+  - No 1000+ lines of code files
+
+
+How can we enforce this, and even more, how can one rely on non-deterministic AI agent to follow the architectural guidelines. Turns out, there is a deterministic approach for this problem - [Sentrux](https://github.com/sentrux/sentrux) - and in this blog, we will cover how to hook it into our AI Agent, specifically, the [Autonomous Multi-Agent Development with Claude Code](./00-multi-agents-with-claude-code)
+
+## Use cases for Sentrux
+
+To evaluate the Sentrux use cases we will perform the following step by step experiment.
+
+### The Baseline
+
+- Ask the multi agent system to implement a complex task, in particular, break down a design document and implement features in sequence as we have considered before in [Autonomous Multi-Agent Development with Claude Code](./00-multi-agents-with-claude-code).
+- We will evaluate the previous Sentrux score, and the next (before and after), and manually inspect how this reflects on code quality
+
+With the baseline, we aim to establish whether the sentrux score makes sense at all, and whether it is currently a problem when solving large tasks. I expect that it might be, so the sentrux score is expected to degrade over the course of implementation of large task, such as design doc, split in multiple features.
+
+### The Sentrux value
+
+Once we establish the baseline, we are going to try and extract the value from sentrux.
+
+- To ensure the experiment is sound, we will use the same task as before, hence removing this variable
+- We will provide the ability to the agent to compute architecture score before starting coding.
+- After review pass, architecture score will be used as a gating check - worse score means worse architecture quality, so review is a FAIL
+- The sentrux is expected to clarify what is failing, so that the writer agent can fix the score
+
+### Other potential use cases
+
+One might extrapolate as far as letting AI agent address arbitrary code tech debt, albeit the test coverage is good enough that agent will not regress features.

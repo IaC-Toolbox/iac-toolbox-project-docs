@@ -109,16 +109,13 @@ Worktrees are good for parallelising independent work. But when building a full 
 Define a skill which forces the agent to work alone. Instead of spawning parallel sub-agents for every feature, the skill instructs a single agent to work sequentially across all features, maintaining the full picture throughout. We are sacrificing the parallelization speed for quality, which safes human review time in the end.
 
 ```mermaid
-flowchart TD
+flowchart LR
     F1[feature-01.md] --> ORCH[Orchestrator\nagent]
     F2[feature-02.md] --> ORCH
-    F3[feature-03.md] --> ORCH
     ORCH -- step 1 --> A1[feature-01\nimplementation]
     A1 -- opens --> PR1[PR #1]
     PR1 -- step 2 --> A2[feature-02\nimplementation]
     A2 -- opens --> PR2[PR #2]
-    PR2 -- step 3 --> A3[feature-03\nimplementation]
-    A3 -- opens --> PR3[PR #3]
 ```
 
 ### Constant human-in-the-loop problem - hitting permission issues
