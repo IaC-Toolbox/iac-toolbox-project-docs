@@ -33,6 +33,22 @@ For a solo founder or small team, this stack runs on a $6/month VPS and you own 
 
 **Grafana Alloy** is the piece worth explaining. It replaced Grafana Agent in 2024 as the unified collector for the Grafana ecosystem. One binary that can scrape Prometheus targets, collect logs (Loki), and receive traces (Tempo). It's the connective tissue of the entire observability stack — in Part 1 we use it for metrics, but the same Alloy instance will handle logs and traces in later parts without adding new infrastructure.
 
+
+```mermaid
+graph LR
+    subgraph "App Service Device"
+        NE["Node Exporter :9100"] -->|local scrape| Alloy["Grafana Alloy"]
+        CA["cAdvisor :8080"] -->|local scrape| Alloy
+    end
+    subgraph "Platform"
+        Prom["Prometheus :9090\n(remote_write receiver)"]
+        GF["Grafana :3000"]
+    end
+    Alloy -->|HTTPS remote_write| Prom
+    GF -->|PromQL queries| Prom
+```
+
+
 ---
 
 ## Prerequisites
