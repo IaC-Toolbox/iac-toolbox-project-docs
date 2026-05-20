@@ -90,6 +90,96 @@ There is yet another alternative which is to create alert via grafana UI, but th
 
 ---
 
+## Node labels vs service labels — who owns what
+
+Before writing rules, it is worth being explicit about the two kinds of identifying labels that appear on alerts, because they have different owners and different purposes.
+
+**Node labels** identify the physical or virtual host — the machine running the workload. They are attached to Node Exporter metrics by Alloy at scrape time and are the same across every service that happens to run on that host. A label like `node="raspberry-pi"` means: this alert fired on that specific machine. Node-level alerts — disk full, memory exhausted, host unreachable — are owned by the **platform team**. The platform team provisions the nodes, manages the OS, and is responsible for the health of the underlying infrastructure regardless of what application is running on top.
+
+**Service labels** identify the application — the container or logical workload. They are attached by the development team that owns the service, because only that team knows its name, its environment, and what thresholds make sense for it. A label like `service="payments-api"` means: this alert is about that specific application, not just the node it happens to live on. Container-level alerts — OOM kills, crash loops, memory pressure — are owned by the **development team** that ships the service.
+
+This distinction matters when alerts start routing. A `NodeDown` alert should wake up the on-call platform engineer. A `ContainerOOMKill` for `payments-api` should wake up the payments team. The labels are what make that routing possible.
+
+In practice this maps cleanly onto Terraform ownership: node alert modules are defined in platform infrastructure repositories, service alert modules are defined alongside each service's own Terraform. Both use the same `threshold_alert` module — only the labels differ.
+
+For node-level alerts the platform team sets the `node` label explicitly — they know exactly which host they are targeting. For container-level alerts the development team should not need to know or hardcode the host name. Instead, Terraform infers it at apply time using the `external` data source, reading the hostname of the machine where `terraform apply` runs and exposing it as `local.node_name`. This keeps the service Terraform free of any host-specific knowledge while still producing a correct `node` label on every alert.
+
+The `threshold_alert` module is extended with two new optional variables to carry these labels:
+
+```hcl
+# modules/threshold_alert/main.tf
+
+variable "name"           { type = string }
+variable "folder_uid"     { type = string }
+variable "datasource_uid" { type = string }
+variable "expr"           { type = string }
+variable "threshold"      { type = number }
+variable "comparator"     { type = string; default = "gt" }
+variable "for"            { type = string; default = "5m" }
+variable "severity"       { type = string; default = "critical" }
+variable "summary"        { type = string }
+variable "description"    { type = string; default = "" }
+variable "no_data_state"  { type = string; default = "NoData" }
+variable "node"           { type = string; default = "" }   # set by platform for host-level alerts
+variable "service"        { type = string; default = "" }   # set by dev teams for container-level alerts
+
+locals {
+  base_labels = { severity = var.severity }
+  node_label    = var.node    != "" ? { node    = var.node    } : {}
+  service_label = var.service != "" ? { service = var.service } : {}
+  labels = merge(local.base_labels, local.node_label, local.service_label)
+}
+
+resource "grafana_rule_group" "this" {
+  name             = var.name
+  folder_uid       = var.folder_uid
+  interval_seconds = 60
+
+  rule {
+    name      = var.name
+    condition = "C"
+
+    data {
+      ref_id         = "A"
+      relative_time_range { from = 600; to = 0 }
+      datasource_uid = var.datasource_uid
+      model = jsonencode({ expr = var.expr, refId = "A" })
+    }
+
+    data {
+      ref_id         = "B"
+      datasource_uid = "__expr__"
+      relative_time_range { from = 0; to = 0 }
+      model = jsonencode({ type = "reduce", refId = "B", expression = "A", reducer = "last" })
+    }
+
+    data {
+      ref_id         = "C"
+      datasource_uid = "__expr__"
+      relative_time_range { from = 0; to = 0 }
+      model = jsonencode({
+        type       = "threshold"
+        refId      = "C"
+        expression = "B"
+        conditions = [{ evaluator = { params = [var.threshold], type = var.comparator }, type = "query" }]
+      })
+    }
+
+    no_data_state  = var.no_data_state
+    exec_err_state = "Alerting"
+    for            = var.for
+
+    labels      = local.labels
+    annotations = {
+      summary     = var.summary
+      description = var.description
+    }
+  }
+}
+```
+
+---
+
 ## Wiring alerts into Grafana via Terraform
 
 ### Project structure
@@ -129,13 +219,30 @@ data "grafana_data_source" "prometheus" {
   name = "Prometheus"
 }
 
-# Service-scoped folder — keeps this service's alerts visually separated
-resource "grafana_folder" "my_service" {
-  title = "my_service_alerts"
+# Infer the node name from the machine running terraform apply.
+# Falls back to the NODE_NAME environment variable when set — useful in CI
+# where apply runs on a different machine than the monitored host.
+data "external" "node_name" {
+  program = ["bash", "-c", "echo \"{\\\"name\\\": \\\"${NODE_NAME:-$(hostname)}\\\"}\""]
 }
+
+locals {
+  node_name = data.external.node_name.result.name
+}
+
 ```
 
-Grafana works by placing all alerts into a single folder regardless of their origin, so we create folder above.
+Grafana works by placing all alerts into a folder. I find it handy to organise alerts by folders, so generally I create a folder per device and service like follows:
+
+```hcl
+resource "grafana_folder" "node_alerts" {
+  title = "${local.node_name}"
+}
+
+resource "grafana_folder" "container_alerts" {
+  title = "${var.service_name}"
+}
+```
 
 ### Alert rules — `grafana_rule_group` approach
 
@@ -183,6 +290,15 @@ variable "severity"       { type = string; default = "critical" }
 variable "summary"        { type = string }
 variable "description"    { type = string; default = "" }
 variable "no_data_state"  { type = string; default = "NoData" }
+variable "node"           { type = string; default = "" }   # set by platform for host-level alerts
+variable "service"        { type = string; default = "" }   # set by dev teams for container-level alerts
+
+locals {
+  base_labels = { severity = var.severity }
+  node_label    = var.node    != "" ? { node    = var.node    } : {}
+  service_label = var.service != "" ? { service = var.service } : {}
+  labels = merge(local.base_labels, local.node_label, local.service_label)
+}
 
 resource "grafana_rule_group" "this" {
   name             = var.name
@@ -223,7 +339,7 @@ resource "grafana_rule_group" "this" {
     exec_err_state = "Alerting"
     for            = var.for
 
-    labels      = { severity = var.severity }
+    labels      = local.labels
     annotations = {
       summary     = var.summary
       description = var.description
@@ -235,89 +351,65 @@ resource "grafana_rule_group" "this" {
 With this module, each alert call site looks like:
 
 ```hcl
-module "alert_node_down" {
-  source = "./modules/threshold_alert"
+# Node-level alerts — provisioned by the platform team.
+# The `node` label identifies the host; no `service` label is set here.
 
+module "alert_node_down" {
+  source         = "./modules/threshold_alert"
   name           = "NodeDown"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.node_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "up{job=\"node\",instance=\"raspberry-pi\"}"
+  expr           = "up{job=\"node_exporter\",instance=\"${local.node_name}\"}"
   threshold      = 1
   comparator     = "lt"
   for            = "2m"
   severity       = "critical"
   no_data_state  = "Alerting"
-  summary        = "Raspberry Pi is offline"
-  description    = "No scrape data for more than 2 minutes. The Pi may be down or unreachable."
-}
-
-module "alert_high_memory" {
-  source = "./modules/threshold_alert"
-
-  name           = "HighMemoryUsage"
-  folder_uid     = grafana_folder.pi_alerts.uid
-  datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "(1 - (node_memory_MemAvailable_bytes{instance=\"raspberry-pi\"} / node_memory_MemTotal_bytes{instance=\"raspberry-pi\"})) * 100"
-  threshold      = var.memory_critical_threshold
-  for            = "5m"
-  severity       = "critical"
-  summary        = "High memory on Raspberry Pi"
-  description    = "Memory usage is above ${var.memory_critical_threshold}%"
-}
-
-module "alert_swap_in_use" {
-  source = "./modules/threshold_alert"
-
-  name           = "SwapInUse"
-  folder_uid     = grafana_folder.pi_alerts.uid
-  datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "node_memory_SwapUsed_bytes{instance=\"raspberry-pi\"}"
-  threshold      = 0
-  for            = "5m"
-  severity       = "warning"
-  summary        = "Swap in use on Raspberry Pi"
-  description    = "Physical memory may be exhausted. Check for memory leaks or reduce workload."
+  node           = local.node_name
+  summary        = "Host ${local.node_name} is offline"
+  description    = "No scrape data for more than 2 minutes."
 }
 
 module "alert_low_disk" {
-  source = "./modules/threshold_alert"
-
+  source         = "./modules/threshold_alert"
   name           = "LowDiskSpace"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.node_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "(1 - (node_filesystem_avail_bytes{instance=\"raspberry-pi\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"raspberry-pi\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"})) * 100"
+  expr           = "(1 - (node_filesystem_avail_bytes{instance=\"${local.node_name}\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"${local.node_name}\",fstype!~\"tmpfs|overlay\",mountpoint=\"/\"})) * 100"
   threshold      = var.disk_critical_threshold
   for            = "5m"
   severity       = "critical"
-  summary        = "Low disk space on Raspberry Pi"
+  node           = local.node_name
+  summary        = "Low disk space on ${local.node_name}"
+  description    = "Root filesystem above ${var.disk_critical_threshold}%."
 }
 
-module "alert_high_cpu" {
-  source = "./modules/threshold_alert"
-
-  name           = "HighCPUUsage"
-  folder_uid     = grafana_folder.pi_alerts.uid
+module "alert_high_memory" {
+  source         = "./modules/threshold_alert"
+  name           = "HighMemoryUsage"
+  folder_uid     = grafana_folder.node_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\",instance=\"raspberry-pi\"}[5m])) * 100)"
-  threshold      = var.cpu_critical_threshold
-  for            = "5m"
-  severity       = "warning"
-  summary        = "High CPU on Raspberry Pi"
-}
-
-# Temperature alert — specific to ARM/Pi hardware
-module "alert_cpu_temp" {
-  source = "./modules/threshold_alert"
-
-  name           = "HighCPUTemperature"
-  folder_uid     = grafana_folder.pi_alerts.uid
-  datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "node_hwmon_temp_celsius{instance=\"raspberry-pi\",chip=\"cpu_thermal\"}"
-  threshold      = 75
+  expr           = "(1 - (node_memory_MemAvailable_bytes{instance=\"${local.node_name}\"} / node_memory_MemTotal_bytes{instance=\"${local.node_name}\"})) * 100"
+  threshold      = var.memory_critical_threshold
   for            = "5m"
   severity       = "critical"
-  summary        = "High CPU temperature on Raspberry Pi"
-  description    = "Thermal throttling occurs above 80°C. Check cooling and ambient temperature."
+  node           = local.node_name
+  summary        = "High memory on ${local.node_name}"
+  description    = "Memory above ${var.memory_critical_threshold}%."
+}
+
+module "alert_swap_in_use" {
+  source         = "./modules/threshold_alert"
+  name           = "SwapInUse"
+  folder_uid     = grafana_folder.node_alerts.uid
+  datasource_uid = data.grafana_data_source.prometheus.uid
+  expr           = "node_memory_SwapUsed_bytes{instance=\"${local.node_name}\"}"
+  threshold      = 0
+  for            = "5m"
+  severity       = "warning"
+  node           = local.node_name
+  summary        = "Swap in use on ${local.node_name}"
+  description    = "Physical memory may be exhausted."
 }
 ```
 
@@ -326,66 +418,71 @@ module "alert_cpu_temp" {
 Container alerts use cAdvisor metrics and follow the same module pattern:
 
 ```hcl
-module "alert_container_restarting" {
-  source = "./modules/threshold_alert"
+# Container-level alerts — provisioned by the development team that owns the service.
+# The `service` label identifies the application; `node` is inferred at apply time
+# so the team does not need to know or hardcode the host name.
 
+module "alert_container_restarting" {
+  source         = "./modules/threshold_alert"
   name           = "ContainerRestarting"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.container_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  # name!="" filters out the cAdvisor root cgroup
-  expr           = "increase(container_start_time_seconds{name!=\"\"}[5m])"
+  expr           = "increase(container_start_time_seconds{name=\"${var.service_name}\",instance=\"${local.node_name}\"}[5m])"
   threshold      = 2
   for            = "1m"
   severity       = "critical"
-  summary        = "Container {{ $labels.name }} is restarting"
+  node           = local.node_name
+  service        = var.service_name
+  summary        = "Container ${var.service_name} is restarting on ${local.node_name}"
   description    = "Container has restarted more than twice in 5 minutes — likely in a crash loop."
 }
 
 module "alert_container_oom" {
-  source = "./modules/threshold_alert"
-
+  source         = "./modules/threshold_alert"
   name           = "ContainerOOMKill"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.container_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "increase(container_oom_events_total{name!=\"\"}[5m])"
+  expr           = "increase(container_oom_events_total{name=\"${var.service_name}\",instance=\"${local.node_name}\"}[5m])"
   threshold      = 0
-  for            = "0s"   # fire immediately — OOM already happened
+  for            = "0s"
   no_data_state  = "NoData"
   severity       = "critical"
-  summary        = "Container {{ $labels.name }} was OOM killed"
-  description    = "The kernel OOM killer terminated this container. Memory limit may be too low or there is a memory leak."
+  node           = local.node_name
+  service        = var.service_name
+  summary        = "Container ${var.service_name} was OOM killed on ${local.node_name}"
+  description    = "The kernel OOM killer terminated this container. Memory limit may be too low."
 }
 
 module "alert_container_high_memory" {
-  source = "./modules/threshold_alert"
-
+  source         = "./modules/threshold_alert"
   name           = "ContainerHighMemory"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.container_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  # container_spec_memory_limit_bytes == 0 means no limit — filter those out
-  expr           = "(container_memory_usage_bytes{name!=\"\"} / container_spec_memory_limit_bytes{name!=\"\"}) * 100 > 0"
+  expr           = "(container_memory_usage_bytes{name=\"${var.service_name}\",instance=\"${local.node_name}\"} / container_spec_memory_limit_bytes{name=\"${var.service_name}\",instance=\"${local.node_name}\"}) * 100 and container_spec_memory_limit_bytes{name=\"${var.service_name}\",instance=\"${local.node_name}\"} > 0"
   threshold      = 85
   for            = "5m"
   severity       = "warning"
-  summary        = "Container {{ $labels.name }} is near its memory limit"
-  description    = "Memory usage is above 85% of limit. An OOM kill is likely if this continues."
+  node           = local.node_name
+  service        = var.service_name
+  summary        = "Container ${var.service_name} near memory limit on ${local.node_name}"
+  description    = "Memory usage above 85% of limit."
 }
 
 module "alert_container_cpu_throttled" {
-  source = "./modules/threshold_alert"
-
+  source         = "./modules/threshold_alert"
   name           = "ContainerCPUThrottled"
-  folder_uid     = grafana_folder.pi_alerts.uid
+  folder_uid     = grafana_folder.container_alerts.uid
   datasource_uid = data.grafana_data_source.prometheus.uid
-  expr           = "rate(container_cpu_cfs_throttled_seconds_total{name!=\"\"}[5m]) / rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]) * 100"
+  expr           = "rate(container_cpu_cfs_throttled_seconds_total{name=\"${var.service_name}\",instance=\"${local.node_name}\"}[5m]) / rate(container_cpu_usage_seconds_total{name=\"${var.service_name}\",instance=\"${local.node_name}\"}[5m]) * 100 and rate(container_cpu_usage_seconds_total{name=\"${var.service_name}\",instance=\"${local.node_name}\"} [5m]) > 0"
   threshold      = 25
-  for            = "10m"   # sustained throttling — transient spikes are normal
+  for            = "10m"
   severity       = "warning"
-  summary        = "Container {{ $labels.name }} is CPU-throttled"
-  description    = "More than 25% of CPU time is being throttled. Raise the container CPU limit or reduce load."
+  node           = local.node_name
+  service        = var.service_name
+  summary        = "Container ${var.service_name} CPU-throttled on ${local.node_name}"
+  description    = "More than 25% of CPU time is being throttled."
 }
 ```
-
 
 ---
 
@@ -399,6 +496,8 @@ variable "grafana_url" { type = string }
 variable "grafana_admin_user" { type = string; default = "admin" }
 variable "grafana_admin_password" { type = string; sensitive = true }
 
+variable "service_name" { type = string }   # e.g. "payments-api", "my-service"
+
 variable "memory_critical_threshold" { type = number; default = 95 }
 variable "cpu_critical_threshold"    { type = number; default = 90 }
 variable "disk_critical_threshold"   { type = number; default = 90 }
@@ -411,6 +510,8 @@ grafana_url            = "http://localhost:3000"
 grafana_admin_user     = "admin"
 grafana_admin_password = "changeme"
 
+service_name           = "my-service"
+
 # Pi-specific thresholds — tighter than a server because less headroom
 memory_critical_threshold = 90
 cpu_critical_threshold    = 85
@@ -419,7 +520,10 @@ disk_critical_threshold   = 85
 
 ---
 
-## Applying service alerts
+## Applying service alerts and node alerts
+
+Notice we are provisioning alerts per service and per nodes separately, as in practice there can be arbitrary number of services running on nodes.
+
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
@@ -444,6 +548,13 @@ https://grafana.iac-toolbox.com
 Click into the folder to see all 5 alert rules:
 
 ![Grafana Alert Rules](./v0-images/observability-grafana-alert-rules.png)
+
+### Verify Service and Node labels
+
+Expand an alert rule to see which label it applies to:
+
+![Grafana Alert Rules Labels](./v0-images/alert_rule_labels.png)
+
 
 ## Conclusion
 You now have a working alert layer on top of your metrics stack. Grafana is evaluating rules on a 60-second cycle, and any rule that crosses its threshold - a disk filling up, a container crash-looping, memory exhausted - transitions through Normal → Pending → Firing and becomes visible in the alert rules view.

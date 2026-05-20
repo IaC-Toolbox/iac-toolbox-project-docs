@@ -62,7 +62,8 @@ Let's head to [pagerduty.com](https://www.pagerduty.com/) and create an account.
 
 **Integrations → API Access Keys → Create API Key** to get your `pagerduty_token`.
 
-**Finding your service region** — look at your PagerDuty URL. If it looks like `https://<company>.eu.pagerduty.com` you are in `eu`. If it is `https://<company>.pagerduty.com` you are in `us`. The region matters for the Terraform provider - using the wrong one causes authentication errors that are not obviously region-related.
+![Pagerduty API Key](./v0-images/pagerduty_create_api_key.png)
+
 
 ---
 
@@ -156,7 +157,7 @@ graph LR
     PS -->|incident| OC["On-Call Engineer"]
 ```
 
-When a alert is critical enough that it has to flow into PagerDuty, it goes through [Events API v2 API](https://developer.pagerduty.com/docs/events-api-v2-overview) to create incidents. But first we need to make generate an integration key. Conveniently it can be done using terraform. Let's create Pagerduty Terraform Module:
+When a alert is critical enough that it has to flow into PagerDuty, it goes through [Events API v2 API](https://developer.pagerduty.com/docs/events-api-v2-overview). For that to happen, we need to generate an integration key. Conveniently it can be done using terraform. Let's create Pagerduty Terraform Module:
 
 ```hcl
 # modules/pagerduty/main.tf
@@ -173,7 +174,10 @@ output "integration_key" {
 }
 ```
 
-The above code outputs the integration key. Note the `var.service` is a variable we will define soon for our service. The service is needed, because incidents are assigned to services. When an alert fires, users who are on-call get notified according to the service's escalation policy. An escalation policy answers the question: *who gets alerted, and what happens if they don't respond?* It defines the sequence of users or teams to notify and the delay between escalation steps. On the free plan, PagerDuty allows one escalation policy — we reference the default one using a `data` source rather than creating a new one.
+The above code outputs the integration key. Remember the `var.service` from [Observability Vertical Part 2 - Service Alert Provisioning](./observability-vertical-02-service-alerts)? We want to ensure that alerts carry over the service label, so that we can then route the alert into the right Pagerduty service.
+
+In PagerDuty, incidents are always assigned to a service - it's the organisational unit that owns the problem. When a critical alert fires, an incident is created on that service, and whoever is on-call for it gets notified.
+
 
 
 ### Configure Contact Point from Grafana to PagerDuty
@@ -196,7 +200,7 @@ resource "grafana_contact_point" "pagerduty" {
     integration_key = module.pagerduty[0].integration_key
     severity        = "critical"
     # Go template — renders the firing alert names directly in the PagerDuty incident title
-    summary = "{{ len .Alerts.Firing }} alert(s): {{ range .Alerts.Firing }}{{ .Labels.alertname }} {{ end }}"
+    summary = "{% raw %}{{ len .Alerts.Firing }} alert(s) on {{ (index .Alerts.Firing 0).Labels.node }}{{ if (index .Alerts.Firing 0).Labels.service }} [{{ (index .Alerts.Firing 0).Labels.service }}]{{ end }}: {{ range .Alerts.Firing }}{{ .Annotations.summary }}; {{ end }}{% endraw %}"
   }
   lifecycle {
     create_before_destroy = true
@@ -207,7 +211,15 @@ resource "grafana_contact_point" "pagerduty" {
 The `severity=critical` setting ensures that only critical alerts trigger PagerDuty incidents, reducing noise from less important alerts. Remember our critical alerts are the ones that signal either device/node down, container restarting, or either approaching resources limit like RAM and Disk Space.
 
 
-The `summary` template means the PagerDuty incident title immediately tells you what's wrong — "2 alert(s): NodeDown ContainerOOMKill" — without needing to open Grafana first.
+The `summary` field is the message that Grafana will send to PagerDuty. The Go template renders the firing alert names directly in the PagerDuty incident title, immediately telling you what's wrong. Examples:
+
+```sh
+1 alert(s) on raspberrypi-4b: Host raspberrypi-4b is offline;
+2 alert(s) on raspberrypi-4b: Low disk space on raspberrypi-4b; High memory on raspberrypi-4b;
+3 alert(s) on raspberrypi-4b: Container my-app is restarting on raspberrypi-4b; Container my-app was OOM killed on raspberrypi-4b; ...
+```
+
+The alerts are grouped by the node and service name based on notification policy below.
 
 ### Configure Grafana notification policy to use PagerDuty contact point
 
@@ -242,7 +254,7 @@ So according to the policy above, all of our alerts are going to pass through th
 
 ```hcl
 resource "grafana_notification_policy" "main" {
-  group_by      = ["alertname", "instance"]
+  group_by      = ["alertname", "instance", "service"]
   contact_point = grafana_contact_point.pagerduty[0].name
 
   # Default: buffer for 30s to group related alerts, repeat every 4h
@@ -269,6 +281,7 @@ resource "grafana_notification_policy" "main" {
       match = "="
       value = "warning"
     }
+    contact_point = grafana_contact_point.pagerduty[0].name
     group_wait      = "1m"
     repeat_interval = "24h"
   }
@@ -281,7 +294,7 @@ resource "grafana_notification_policy" "main" {
 
 A few decisions worth understanding:
 
-- `group_by = ["alertname", "instance"]` - without `instance`, alerts from all hosts collapse into a single PagerDuty incident. With it, each host gets its own incident grouping so it's immediately clear which machine is the problem.
+- `group_by = ["alertname", "instance", "service"]` - without `instance`, alerts from all hosts collapse into a single PagerDuty incident. With it, each host gets its own incident grouping so it's immediately clear which machine is the problem.
 - `group_wait = "30s"` at the top level - when a node goes down it often triggers several alerts simultaneously (NodeDown, HighMemory, LowDisk if the disk was filling). The 30-second buffer lets them group into a single notification. The critical policy overrides this to `0s` so a node going offline pages immediately - the grouping still happens, just without the artificial delay.
 - `repeat_interval` - since this is our pet project, once a day pager is enough. For more business-critical this can be adjusted to become more frequent.
 ---
@@ -300,8 +313,8 @@ data "pagerduty_escalation_policy" "default" {
   name = "Default"
 }
 
-resource "pagerduty_service" "infra" {
-  name = "Infrastructure-Monitoring"
+resource "pagerduty_service" "my_service" {
+  name = var.service_name
   # Note: avoid spaces in the service name — spaces cause routing issues where
   # alert messages fail to match the PagerDuty service correctly
 
@@ -317,13 +330,15 @@ resource "pagerduty_service" "infra" {
 }
 ```
 
+The escalation policy attached to the service answers two questions: who gets paged, and what happens if they don't respond? It defines an ordered sequence of users or teams to notify, with configurable delays between each step. On the free plan PagerDuty gives you one escalation policy, so rather than creating one we reference the existing default using a data source.
+
 `alert_creation` controls how PagerDuty handles incoming events from the integration. We want to create alerts and incidents in pagerduty.
 
 ## Putting it all together
 
 Throughout this post we have provisioned pieces in isolation. Here is how they connect:
 
-The integration key is the binding pin. It is generated by `pagerduty_service_integration`, which is bound to `pagerduty_service.infra`. Every event Grafana pushes using that key lands on that specific service, which then applies its escalation policy to decide who gets paged.
+The integration key is the binding pin. It is generated by `pagerduty_service_integration`, which is bound to `pagerduty_service.my_service`. Every event Grafana pushes using that key lands on that specific service, which then applies its escalation policy to decide who gets paged.
 
 Here is the complete Terraform that wires all four pieces together in one place:
 
@@ -337,8 +352,8 @@ data "pagerduty_escalation_policy" "default" {
 }
 
 # The service — all incidents land here
-resource "pagerduty_service" "infra" {
-  name                    = "Infrastructure-Monitoring"
+resource "pagerduty_service" "my_service" {
+  name                    = var.service_name
   escalation_policy       = data.pagerduty_escalation_policy.default.id
   alert_creation          = "create_alerts_and_incidents"
   auto_resolve_timeout    = 172800  # 48 hours
@@ -348,7 +363,7 @@ resource "pagerduty_service" "infra" {
 # The integration — binds Grafana to the service and produces the key
 resource "pagerduty_service_integration" "grafana" {
   name    = "Grafana"
-  service = pagerduty_service.infra.id          # ← bound to the service above
+  service = pagerduty_service.my_service.id          # ← bound to the service above
   type    = "events_api_v2_inbound_integration"
 }
 
@@ -437,8 +452,8 @@ data "pagerduty_escalation_policy" "default" {
   name = "Default"
 }
 
-resource "pagerduty_service" "infra" {
-  name                    = "Infrastructure-Monitoring"
+resource "pagerduty_service" "my_service" {
+  name                    = var.service_name
   escalation_policy       = data.pagerduty_escalation_policy.default.id
   alert_creation          = "create_alerts_and_incidents"
   auto_resolve_timeout    = 172800
@@ -447,7 +462,7 @@ resource "pagerduty_service" "infra" {
 
 module "pagerduty" {
   source  = "./modules/pagerduty"
-  service = pagerduty_service.infra.id
+  service = pagerduty_service.my_service.id
 }
 ```
 
@@ -516,3 +531,9 @@ grafana_contact_point.pagerduty (consumes integration_key)
         ↓
 grafana_notification_policy.main (consumes contact_point.name)
 ```
+
+### Testing
+
+Check that the Service has been created
+
+![Pagerduty Service](./v0-images/pagerduty_service.png)

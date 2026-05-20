@@ -1,0 +1,489 @@
+---
+title: Sentrux - Using Architectural Sensor to improve quality of codebase in AI assisted coding
+description: How Sentrux improves reviewer loop
+author: Viktor Vasylkovskyi
+date: "2026-04-20"
+---
+
+Our AI Agent is working autonomously and can implement a spec. But can we trust it with non-degrading the large codebase quality over time? Sure it can implement the spec, but how about:
+
+- Reusing code right
+- Ensuring modularity
+- No 1000+ lines of code files
+
+How can we enforce this, and even more, how can one rely on non-deterministic AI agent to follow the architectural guidelines. Turns out, there is a deterministic approach for this problem - [Sentrux](https://github.com/sentrux/sentrux) - and in this blog, we will cover how to hook it into our AI Agent, specifically, the [Autonomous Multi-Agent Development with Claude Code](./00-multi-agents-with-claude-code)
+
+## Use cases for Sentrux
+
+To evaluate the Sentrux use cases we will perform the following step by step experiment.
+
+### The Baseline
+
+- Ask the multi agent system to implement a complex task, in particular, break down a design document and implement features in sequence as we have considered before in [Autonomous Multi-Agent Development with Claude Code](./00-multi-agents-with-claude-code).
+- We will evaluate the previous Sentrux score, and the next (before and after), and manually inspect how this reflects on code quality
+
+With the baseline, we aim to establish whether the sentrux score makes sense at all, and whether it is currently a problem when solving large tasks. I expect that it might be, so the sentrux score is expected to degrade over the course of implementation of large task, such as design doc, split in multiple features.
+
+### The Sentrux value
+
+Once we establish the baseline, we are going to try and extract the value from sentrux.
+
+- To ensure the experiment is sound, we will use the same task as before, hence removing this variable
+- We will provide the ability to the agent to compute architecture score before starting coding.
+- After review pass, architecture score will be used as a gating check - worse score means worse architecture quality, so review is a FAIL
+- The sentrux is expected to clarify what is failing, so that the writer agent can fix the score
+
+### Other potential use cases
+
+One might extrapolate as far as letting AI agent address arbitrary code tech debt, albeit the test coverage is good enough that agent will not regress features.
+
+---
+
+## Step-by-Step Manual Experiment
+
+Before wiring Sentrux into the agent loop, run the experiment by hand. This validates the premise — that the score actually degrades during unconstrained AI implementation — before you invest in automation.
+
+### Prerequisites
+
+Install Sentrux globally:
+
+```bash
+npm install -g sentrux
+```
+
+Verify it works against your repo:
+
+```bash
+cd your-repo
+sentrux gate --save .
+```
+
+You should see output like:
+
+```
+Scanning ....
+[scan] git ls-files: 362 total, 361 kept, 1 dropped
+[build_project_map] 361 files, 163 unique dirs
+Quality:      5633
+Coupling:     0.57
+Cycles:       0
+God files:    2
+✓ Baseline saved
+```
+
+Sentrux has now saved your structural baseline. The key metric is **quality_signal** — a composite score derived from coupling, cycles, god files, and complexity. The higher it is, the better the architecture.
+
+### Phase 1 — Establish the Baseline (no Sentrux gate)
+
+**Step 1.** Record the pre-implementation Sentrux score by running:
+
+```bash
+sentrux gate .
+```
+
+Note the values for quality, coupling, cycles, and god file count.
+
+**Step 2.** Run the multi-agent orchestrator on a large design document without any Sentrux gate. Let it decompose the design doc into features and implement them one by one using the write-review loop as described in the previous post.
+
+**Step 3.** After implementation completes, run the gate again:
+
+```bash
+sentrux gate .
+```
+
+Compare the before and after numbers. You are looking to answer: did unconstrained AI implementation degrade the architecture score? Likely yes — agents tend to introduce new files that duplicate existing utilities, grow existing files beyond a sane size, and create coupling where none existed before.
+
+### Phase 2 — Add the Sentrux Gate
+
+**Step 1.** Reset to the same starting state (same branch, same codebase) to keep the experiment controlled.
+
+**Step 2.** Save a fresh baseline:
+
+```bash
+sentrux gate --save .
+```
+
+**Step 3.** Run the same orchestrator task again. This time the reviewer agent runs `sentrux gate .` after every feature implementation. If the score degrades, the reviewer returns `FAIL` with the full Sentrux output, and the writer must fix the architecture before the branch can merge.
+
+**Step 4.** Compare the final Sentrux score to Phase 1. The gate-constrained run should finish at equal or better quality.
+
+### Reading the Sentrux Gate Output
+
+When Sentrux detects no regression it outputs:
+
+```
+Quality:      5633 -> 5633
+Coupling:     0.57 → 0.57
+Cycles:       0 → 0
+God files:    2 → 2
+Distance from Main Sequence: 0.55
+✓ No degradation detected
+```
+
+When it detects a regression the exit code is non-zero and the output will show which metrics worsened. For example:
+
+```
+Quality:      5633 -> 4981
+Coupling:     0.57 → 0.71
+Cycles:       0 → 2
+God files:    2 → 4
+✗ Degradation detected
+```
+
+This output is the feedback the writer agent receives in the FAIL message, giving it the exact signals it needs to refactor before the branch can pass.
+
+---
+
+## The Skills
+
+To automate this experiment we added two things to the `autopilot-workflow` plugin: a new `sentrux` skill for capturing baselines, and an updated `feature-reviewer` agent that runs the gate on every branch.
+
+### The Sentrux Skill
+
+The skill is a single-purpose command: save the architectural baseline for a repo. You run it once before kicking off the orchestrator. It lives at `skills/sentrux/SKILL.md` in the plugin.
+
+```markdown
+---
+name: sentrux
+description:
+  Saves a Sentrux architectural baseline for a repo using `sentrux gate --save .`.
+  Run once per repo with /autopilot-workflow:sentrux, then re-run any time you want to accept
+  the current state as the new baseline. Optional — the review loop works without it, but when
+  a baseline is present the feature-reviewer will run `sentrux gate .` and fail any branch that
+  causes a regression.
+---
+
+You are saving a Sentrux architectural baseline for this repo.
+
+## Step 1 — Check Sentrux is available
+
+\`\`\`bash
+which sentrux 2>/dev/null || echo "NOT_FOUND"
+\`\`\`
+
+If the output is `NOT_FOUND`, stop and tell the user:
+
+Sentrux is not installed. Install it with:
+
+    npm install -g sentrux
+
+Then re-run /autopilot-workflow:sentrux to save the baseline.
+
+Do not proceed until Sentrux is available.
+
+## Step 2 — Save the baseline
+
+Run from the repo root:
+
+\`\`\`bash
+sentrux gate --save . 2>&1; echo "exit: $?"
+\`\`\`
+
+If the command exits non-zero, stop and show the user the full output — do not proceed.
+
+## Step 3 — Print summary to user
+
+Sentrux baseline saved.
+
+The feature-reviewer will now run `sentrux gate .` after every implementation.
+Any structural regression (quality, coupling, cycles, god files) will produce a FAIL verdict.
+
+Re-run /autopilot-workflow:sentrux any time you want to accept the current
+state as the new baseline (e.g. after intentionally addressing tech debt).
+
+## Rules
+
+- Never modify source files — this skill only runs `sentrux gate --save .`
+- If the command fails, surface the error to the user and stop
+```
+
+The design is intentionally minimal. The skill does not parse output, write JSON, or manage any files of its own. `sentrux gate --save .` is the whole operation — Sentrux manages its own state under `.sentrux/`.
+
+### The Updated Feature-Reviewer Agent
+
+The `feature-reviewer` agent already existed as part of the write-review loop. It checks out a branch, runs validation commands from `testing-checklist.md`, reads the diff, and verifies the implementation against the feature spec. We added **Step 2.5** — the Sentrux architecture gate — between the validation commands and the diff review.
+
+Here is the full updated agent at `agents/feature-rewiever.md`:
+
+```markdown
+---
+name: feature-reviewer
+description:
+  Reviews a git branch implementation against a feature spec and task list.
+  Returns a PASS or FAIL verdict. Strictly read-only.
+tools: Bash, Read
+---
+
+You are a strict, read-only code reviewer. You verify that a branch correctly implements
+a feature. You never modify files, never commit, never push, never create PRs.
+
+## Instructions
+
+**Run validation first — before reading the diff or the spec.**
+
+### Step 1 — Read validation context
+
+\`\`\`bash
+cat <repository-path>/.claude/context/testing-checklist.md
+cat <repository-path>/.claude/context/workflow.md
+\`\`\`
+
+Use `testing-checklist.md` as the definitive source of validation commands for this repo.
+Use `workflow.md` as the source of conventions to check the implementation against.
+
+### Step 2 — Run validation commands
+
+Check out the branch and run every command listed in `testing-checklist.md`:
+
+\`\`\`bash
+cd <repository-path>
+git checkout <branch-name>
+
+<command from testing-checklist> 2>&1; echo "exit: $?"
+\`\`\`
+
+If any command exits non-zero → immediately return FAIL. Include the exact command output
+in the FAIL message so the writer knows what to fix.
+
+### Step 2.5 — Sentrux architecture gate
+
+Run the gate check from the repo root:
+
+\`\`\`bash
+cd <repository-path>
+sentrux gate . 2>&1; echo "exit: $?"
+\`\`\`
+
+The command compares the current state against the saved baseline and prints a report like:
+
+Quality: 5633 -> 5633
+Coupling: 0.57 → 0.57
+Cycles: 0 → 0
+God files: 2 → 2
+Distance from Main Sequence: 0.55
+✓ No degradation detected
+
+**If the exit code is non-zero → immediately return FAIL.** Include the full `sentrux gate`
+output in the FAIL message so the writer knows exactly which metrics regressed:
+
+FAIL
+
+- Sentrux architecture gate failed:
+  <full sentrux gate output>
+
+**If the exit code is 0** — no regression. Log a one-line note and continue to Step 3:
+
+Sentrux: no degradation detected — architecture gate passed.
+
+### Step 3 — Read the diff
+
+Only reached if Steps 2 and 2.5 pass entirely.
+
+\`\`\`bash
+cd <repository-path>
+git diff <base-branch>..<branch-name>
+\`\`\`
+
+### Step 4 — Read the spec and task list
+
+Read the feature spec and task list at the paths provided. Note every requirement and
+acceptance criterion.
+
+### Step 5 — Review against these criteria
+
+- Every task in the task list is implemented
+- All requirements and acceptance criteria from the feature spec are met
+- Edge cases mentioned in the spec are handled
+- Tests are present and cover the new behaviour
+- Code follows conventions in `.claude/context/workflow.md`
+- No obvious bugs or security issues introduced
+
+## Output format
+
+**On success:**
+
+PASS
+
+**On failure:**
+
+FAIL
+
+- <specific actionable issue 1>
+- <specific actionable issue 2>
+
+Issues must be specific enough for the writer to fix without asking questions.
+```
+
+The key design decision is that Step 2.5 is unconditional — `sentrux gate .` always runs. If no baseline has been saved, Sentrux exits non-zero with an appropriate error and the reviewer surfaces it. This means a missing baseline will cause failures, which is intentional: once you've run `/autopilot-workflow:sentrux`, the gate is a hard requirement for every subsequent review. If you want to remove the gate, you re-run the skill after an architecture-degrading change to accept the new state as the new floor.
+
+---
+
+## Running the Full Automated Workflow
+
+With both pieces in place, the full workflow is two skill invocations.
+
+### Step 1 — Save the baseline
+
+Before running the orchestrator, invoke the sentrux skill from your repo root:
+
+```
+/autopilot-workflow:sentrux
+```
+
+Claude will run `sentrux gate --save .` and confirm:
+
+```
+Sentrux baseline saved.
+
+The feature-reviewer will now run `sentrux gate .` after every implementation.
+Any structural regression (quality, coupling, cycles, god files) will produce a FAIL verdict.
+```
+
+This is a one-time step per codebase. Re-run it only when you intentionally want to reset the quality floor — for example, after a dedicated refactor session that deliberately changes architectural boundaries.
+
+### Step 2 — Run the orchestrator
+
+Invoke the implementation orchestrator as normal:
+
+```
+/autopilot-workflow:implementation-orchestrator features my-integration-branch
+```
+
+From this point everything is automatic. For each feature spec the orchestrator:
+
+1. Invokes the **feature-writer** agent to implement the spec on a dedicated branch.
+2. Invokes the **feature-reviewer** agent to review the branch.
+3. The reviewer runs tests (Step 2), then runs `sentrux gate .` (Step 2.5), then checks the diff against the spec (Steps 3–5).
+4. If `sentrux gate .` exits non-zero the reviewer returns `FAIL` with the full metrics output. The orchestrator sends this back to the writer agent and the write-review loop repeats.
+5. Only a branch that passes both tests **and** the Sentrux gate can receive a `PASS` verdict and be merged into the integration branch.
+
+### What the writer agent sees on a Sentrux failure
+
+When the architecture gate fires, the writer receives a message like:
+
+```
+FAIL
+- Sentrux architecture gate failed:
+    Quality:      5633 -> 4981
+    Coupling:     0.57 → 0.71
+    Cycles:       0 → 2
+    God files:    2 → 4
+    ✗ Degradation detected
+```
+
+This tells the writer exactly which dimensions regressed. The most actionable signals are:
+
+- **god_file_count increased** — a file has grown too large; split it into smaller modules.
+- **cycle_count increased** — a circular import was introduced; restructure the dependency direction.
+- **coupling_score increased** — too many cross-module dependencies were added; introduce an abstraction or reuse an existing one.
+
+The writer agent refactors, commits, and the reviewer runs again. The loop continues up to `max-iterations` times (default 3). If the branch cannot pass the gate within that budget, the orchestrator pauses and asks you to intervene.
+
+### Refreshing the baseline
+
+If you run a dedicated tech-debt or refactor session that intentionally restructures the codebase, re-run the skill to accept the new state:
+
+```
+/autopilot-workflow:sentrux
+```
+
+This re-saves the baseline from the current state of the repo and the gate will now evaluate future branches against the improved (or deliberately changed) architecture.
+
+### Examples Outputs
+
+```sh
+⏺ Baseline saved on feat/mvp. Now re-running the reviewer on feat/apply-command.
+
+⏺ autopilot-workflow:feature-reviewer(Re-review feat/apply-command after baseline fix)
+  ⎿  Done (21 tool uses · 22.3k tokens · 1m 33s)
+  (ctrl+o to expand)
+
+⏺ FAIL — the implementation introduces a new god file and a complex function. Invoking the writer to fix these issues.
+
+  autopilot-workflow:feature-writer(Fix god file and complex function in feat/apply-command)
+  ⎿  Bash(git -C /Users/vvasylkovskyi/git/vvasylkovskyi/iac-toolbox-raspberrypi/.claude/worktrees/session restore cli/src/actions/applyInstall.ts 2>&1; echo "exit: $?")
+     Running…
+     Bash(git -C /Users/vvasylkovskyi/git/vvasylkovskyi/iac-toolbox-raspberrypi/.claude/worktrees/session status --short 2>&1 && wc -l /Users/vvasylkovskyi/git/vvasylkovs…)
+     Running…
+     Bash(sentrux gate . 2>&1; echo "exit: $?")
+     Running…
+     +109 more tool uses (ctrl+o to expand)
+     (ctrl+b to run in background)
+
+```
+
+#### Installing sentrux when running sentrux
+
+```sh
+⏺ Sentrux is available. Saving the baseline now.
+
+⏺ Bash(sentrux gate --save . 2>&1; echo "exit: $?")
+  ⎿  Scanning ....
+     [build_project_map] 519 files, 136 unique dirs, 130 cache misses, 4.3ms
+     [resolve] 1438 resolved, 198 unresolved (of 1636 total specs)
+     … +8 lines (ctrl+o to expand)
+
+⏺ Sentrux baseline saved.
+
+  The feature-reviewer will now run sentrux gate . after every implementation. Any structural regression
+  (quality, coupling, cycles, god files) will produce a FAIL verdict.
+
+  Re-run /autopilot-workflow:sentrux any time you want to accept the current state as the new baseline
+  (e.g. after intentionally addressing tech debt).
+```
+
+### Sentrux sound check OK by reviewer bot
+
+```sh
+⏺ ---
+  Roadmap execution complete.
+
+  Mode:   bugs
+  Repo:   /Users/vvasylkovskyi/git/agents-console-ui
+  Folder: .claude/context/roadmap/bugs
+
+  ✅ 01-configure-button-variant-inconsistency → PR #254 open → awaiting your review
+
+  Completed: 1
+  Failed:    0
+
+  Bug fix PRs awaiting your review:
+  - PR #254 — Configure Button Variant Inconsistency →
+  https://github.com/PagerDuty/agents-console-ui/pull/254
+
+  What changed: 1 line in src/components/surface-card/surface-card-control-zone.tsx —
+  variant="primary-ghost" → variant="default-outline". All 553 tests pass, sentrux gate clean.
+```
+
+### Example Commit message by bot
+
+```sh
+refactor(apply-command): decompose apply orchestrator and use dynamic import in cli.tsx
+Split the monolithic runApplyInstall function into focused helpers
+(runPreflightChecks, runInstallSequence) to reduce cyclomatic complexity.
+Extracted SSH/Docker primitives to utils/preflightChecks.ts and summary
+formatting to utils/applySummary.ts (both with zero cross-module project
+imports). Use a top-level await dynamic import for the apply command in
+cli.tsx to avoid a static import edge that pushed cli.tsx into god-file
+territory per the sentrux gate.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+```
+
+### Understanding well the baseline
+
+```sh
+Bash(sentrux gate --save . 2>&1 | tail -3)
+  ⎿  Quality: 5718
+
+     Run `sentrux gate` after making changes to compare.
+
+⏺ Wait — I need the baseline on the clean feat/mvp state, not with uncommitted changes. Let me stash, save baseline, then
+  restore.
+
+⏺ Bash(git stash push -m "all-changes-for-sub-prs" && sentrux gate --save . 2>&1 | tail -3)
+  ⎿  Saved working directory and index state On feat/mvp: all-changes-for-sub-prs
+     Quality: 5771
+
+     Run `sentrux gate` after making changes to compare.
+```
