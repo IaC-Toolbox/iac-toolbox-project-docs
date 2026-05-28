@@ -5,8 +5,7 @@ author: Viktor Vasylkovskyi
 date: "2026-05-07"
 ---
 
-A few months ago we started a research spike at PagerDuty: could we build a multi-agent system that investigated incidents the way a human SRE does — generating hypotheses, checking each one against the evidence, narrowing down to the actual cause? More specifically, could we build it in a way that stayed _reactive_ the whole time, so a user could watch hypotheses arrive as they were investigated and inject new ones mid-run?
-
+A few months ago we started a research spike at PagerDuty: could we build a multi-agent system that investigated incidents the way a human SRE does? Generating hypotheses, checking each one against the evidence, narrowing down to the actual cause? More specifically, could we build it in a way that stayed _reactive_ the whole time, so a user could watch hypotheses arrive as they were investigated and inject new ones mid-run?
 The answer, after a few weeks of building, was: yes, you can build that, and here is what it looks like in detail. Then we walked away from it.
 
 This post is about the spike. The architecture, the dead ends, the design decisions — and at the end, why we ended up not shipping any of it. The walk-away is the part I want to be most honest about, because it's the part that's most often missing from engineering write-ups. We learned a lot building this. We learned more by deciding not to take it further.
@@ -22,15 +21,11 @@ The Incident Context document we fed the agent was large: JSON blobs of alerts, 
 
 ### Instruction Overload
 
-Every new feature meant more instructions — new tools, new guardrails, expanded system prompts. [Research suggests there's an inverse relationship between instruction volume and output quality](https://arxiv.org/abs/2507.11538): as the prompt gets longer, the model's ability to follow any given instruction decreases. In a monolithic agent, adding a new capability competes with every existing capability for the model's attention. We could feel this in practice: agents that worked well at a certain feature set started degrading as we added to it.
+Every new feature meant more instructions. New tools, new guardrails, expanded system prompts. [Research suggests there's an inverse relationship between instruction volume and output quality](https://arxiv.org/abs/2507.11538): as the prompt gets longer, the model's ability to follow any given instruction decreases. In a monolithic agent, adding a new capability competes with every existing capability for the model's attention. We could feel this in practice: agents that worked well at a certain feature set started degrading as we added to it.
 
 ### Synchronous execution with a hard ceiling
 
-Our agent ran synchronously with a 120-second timeout. In practice: P50 response was around 10 seconds, P99 was around 45 seconds. Log searches took 30–90 seconds. Past incident recall took 45–60 seconds. A single hypothesis — formulate it, search for evidence, evaluate — chained these together and could take several minutes. Sequential hypothesis testing multiplied that. A moderately complex incident with three or four candidate root causes could take 10+ minutes to diagnose, all of it blocking, none of it visible to the user until it was done.
-
-### Confirmation bias baked in
-
-The agent's diagnostic approach was essentially abductive reasoning — infer the most plausible cause from available symptoms. When it found database timeouts and slow queries, it concluded "database performance issue" because that fit the evidence it had. It never checked the alternative: that a cache failure 30 seconds earlier had caused the database load, and the database was a symptom rather than a cause. Sequential diagnosis encourages this. Once you've found a plausible explanation, the incentive to keep looking disappears. The correct answer isn't always the first one that fits.
+Our agent ran synchronously with a 120-second timeout. In practice: P50 response was around 10 seconds, P99 was around 45 seconds. Log searches took 30-90 seconds. Past incident recall took 45-60 seconds. A single root cause analysis: formulate hypothesis, search for evidence, evaluate - chained these together and could take several minutes. Sequential hypothesis testing multiplied that. A moderately complex incident with three or four candidate root causes could take 10+ minutes to diagnose, all of it blocking, none of it visible to the user until it was done.
 
 ### No interactivity during execution
 
@@ -40,7 +35,7 @@ These weren't individual bugs to fix. They were structural consequences of runni
 
 ## The evolution toward multiple agents
 
-The insight that shifted our thinking: if a single agent struggles with large context, the answer isn't a bigger context window — it's to give each agent a _focused_ subset of the context it actually needs. A coordinator that understands the full incident can delegate to diagnostic sub-agents that each receive only the context relevant to their specific tasks. Smaller context per agent, better reasoning per agent, and the sub-agents run in parallel.
+If a single agent struggles with large context, the answer is to split context into multiple agents and give each agent a _focused_ subset of the context it actually needs. A coordinator that understands the full incident can delegate to sub-agents that each receive only the context relevant to their specific tasks. Smaller context per agent, better reasoning per agent, and the sub-agents run in parallel.
 
 That was the idea. The question was how to actually build it.
 
@@ -60,7 +55,7 @@ flowchart LR
     SRE --> USER
 ```
 
-The non trivial part is letting the user watch all this happen in real time. They want to see hypotheses arrive as they're investigated, not five minutes later as a single block. They might want to interrupt and say "skip hypothesis 3, I already checked the database" or "actually, also check the deployment logs from this morning." And if something goes wrong — they cancel, or they walk away — everything spawned underneath should stop too, not keep burning tokens in the background.
+The non trivial part is letting the users watch all this happen in real time. They want to see hypotheses arrive as they're investigated, not five minutes later as a single block. They might want to interrupt and say "skip hypothesis 3, I already checked the database" or "actually, also check the deployment logs from this morning." If something goes wrong they would cancel to stop burning tokens in the background.
 
 That set of requirements is what made this hard.
 
@@ -81,7 +76,7 @@ gantt
     Decide  : crit, after a3, 1s
 ```
 
-Run one sub-agent. Wait for it. Run the next. Wait. Repeat. Total time is the sum of every sub-agent's duration. Simple to implement. No concurrency primitives, no partial state. The cost is latency. A slow hypothesis in the middle blocks everything behind it. If sub-agent 2 takes ten minutes, sub-agent 3 doesn't even start until minute ten. For an interactive incident-response tool this is a non-starter.
+Run one sub-agent. Wait for it. Run the next. Wait. Repeat. Total time is the sum of every sub-agent's duration. Simple to implement. No concurrency primitives, no partial state. The cost is latency. A slow hypothesis in the middle blocks everything behind it. If sub-agent 2 takes ten minutes, sub-agent 3 doesn't even start until minute ten.
 
 ### Parallel, wait for all
 
@@ -97,7 +92,7 @@ gantt
     Decide  : after a2, 1s
 ```
 
-Dispatch every sub-agent at once. Block until the slowest one finishes. Synthesise everything together. Total time drops to the duration of the slowest sub-agent, which is much better. But the main agent is completely idle during execution. It can't react to early results, it can't tell the user what's happening, and if a user wants to inject a new hypothesis mid-run, the graph is locked inside the parallel call until everything resolves. If one sub-agent hangs, synthesis is blocked indefinitely.
+Dispatch every sub-agent at once synchronously. Block until the slowest one finishes. Synthesise everything together. Total time drops to the duration of the slowest sub-agent, which is much better. But the main agent is completely idle during execution. It can't react to early results, it can't tell the user what's happening, and if a user wants to inject a new hypothesis mid-run, the graph is locked inside the parallel call until everything resolves. If one sub-agent hangs, synthesis is blocked indefinitely.
 
 ### Parallel fan-out and concurrent fan-in
 
@@ -117,47 +112,43 @@ gantt
     Think (4 of 4) : crit, after a4, 1s
 ```
 
-Dispatch all sub-agents at once (concurrently). Then, each time any one of them completes, the main agent does something with that result — it can process the results asynchronously: update the user, maybe even spawn a new sub-agent in response. User input is treated as a first-class event alongside sub-agent results, so a new hypothesis can arrive mid-run and join the batch without restart.
+Dispatch all sub-agents at once (concurrently) as an asynchronous batch. Then, each time any one of them completes, the main agent processes the results asynchronously. Those results could be used to update the user, maybe even spawn a new sub-agent in response. Additionally this opens possibilities for more dynamic interactions, such as user input being treated as a first-class event alongside sub-agent results, so a new information can arrive mid-run and join the batch without restart.
 
 
 
-_Parallel fan-out and concurrent fan-in_ is what we wanted. The main agent is never idle. The user always has visibility. New work can be injected at any point. The hidden cost is implementation complexity. You need an interrupt-and-resume execution model, a buffer for concurrent arrivals, and a way to prioritise user events over sub-agent results. The rest of this post is essentially the learning of what it took to build that - and where the maintenance cost started to outweigh the benefit.
+_Parallel fan-out and concurrent fan-in_ is what we wanted. The main agent is never idle. The user always has visibility. New work can be injected at any point. The hidden cost is implementation complexity. You need an interrupt-and-resume execution model, a buffer for concurrent arrivals, and a way to prioritise user events over sub-agent results. The rest of this post is essentially the learning of what it took to build that.
 
 ## First Attempt: LangChain Deep Agents
 
 The first thing we tried was [LangChain's Deep Agents](https://github.com/langchain-ai/deepagents) framework. Deep Agents give you an orchestrator/planner pattern out of the box — sub-agents are exposed as tools, and the orchestrator decides which tools to call and when. Wiring it up looked like this:
 
 ```python
-model = init_chat_model(model="gpt-4o")
+model = init_chat_model(model="gpt-5.4")
 tools = make_tools()
 agent = create_deep_agent(model, tools=tools, system_prompt=SYSTEM_PROMPT)
 ```
 
-Each sub-agent was just a tool the orchestrator could invoke. The framework handled dispatch, parallelism, and result aggregation. On paper this should have been perfect — it supports both sequential tool calls and parallel tool calls, and it gives you the orchestrator pattern for free.
+Each sub-agent was just a tool the orchestrator could invoke. The framework handled dispatch, parallelism, and result aggregation.
 
-In practice, neither mode fit.
+In sequential mode, the orchestrator waits for each tool to return before invoking the next. That's the first execution model from above with additive latency and slow hypothesis blocking everything.
 
-In sequential mode, the orchestrator waits for each tool to return before invoking the next. That's the first execution model from above — additive latency, slow hypothesis blocks everything.
+In parallel mode, the orchestrator dispatches all tools at once and blocks until every tool returns. That's the second execution model where the main agent is idle the whole time, and there's no hook between individual tool completions.
 
-In parallel mode, the orchestrator dispatches all tools at once and blocks until every tool returns. That's the second execution model — the main agent is idle the whole time, and there's no hook between individual tool completions.
-
-That last point was the one that killed it. There was no way, inside Deep Agents, to say "do something each time a single tool finishes, before the others have." The framework only returned control to the orchestrator once the entire batch resolved. Which meant:
+We came to realise that there was no way, inside Deep Agents, to say "do something each time a single tool finishes, before the others have." The framework only returned control to the orchestrator once the entire batch resolved. Which meant:
 
 - The orchestrator couldn't react to sub-agent 1's result at t=3min while sub-agents 2 and 3 were still running.
 - No external event — including user input — could reach the graph while it was blocked inside a parallel tool call.
 - The tool set was fixed at the point of dispatch. You couldn't add a feedback mid-run without restarting.
 
-Deep Agents are a good fit for parallel dispatch with a single aggregate step at the end and no mid-run interactivity. For our case — where incremental synthesis and user reactivity were the whole point — it was the wrong primitive.
-
-So we started building it ourselves on raw LangGraph. With the benefit of hindsight, this was the moment to stop and re-evaluate. We didn't, and the rest of the post is largely the story is about the rabbit hole we went down.
+So we pivoted into building it ourselves on raw LangGraph.
 
 ## An earlier fork: Custom-made Async Background Agents with LangGraph
 
 Before getting into the LangGraph work, there was a design decision we had to make. When the model spawns a sub-agent asynchronously, that agent becomes detached from the main agent - and it runs in the background. The question then becomes: how do you get results back from a sub-agent to its parent when the sub-agent runs as a background task? Two options we evaluated:
 
-### Kafka as a async medium
+### Kafka as an async medium
 
-The sub-agent publishes a completion event to a topic. The parent agent consumes from that topic. You get durability, replay, and backpressure out of the box. You also get Kafka — brokers, consumer groups, offset management, a new operational dependency.
+The sub-agent publishes a completion event to a topic. The parent agent consumes from that topic. We get durability, replay, and backpressure out of the box. And we would also have to deal with Kafka's new operational dependency.
 
 ### Webhooks
 
@@ -186,7 +177,7 @@ flowchart LR
     Check -->|no| Done[END]
 ```
 
-This broke the moment two sub-agents finished close together. The first completion resumed the graph and triggered main agent working loop. While the main agent was still processing, the second completion arrived and tried to resume the same graph. LangGraph either errored - there's no active interrupt to resume from - or started a fresh execution from scratch, which was worse because now we'd lost the state from the first arrival.
+That approach is a solid core, but it breaks the moment two sub-agents finish close together and attempt concurrent resume. The first completion resumed the graph and triggered main agent working loop. While the main agent was still processing, the second completion arrived and tried to resume the same graph. LangGraph either errored or started a fresh execution from scratch, which was worse because now we'd lost the state from the first arrival.
 
 We needed a buffer.
 
@@ -292,13 +283,13 @@ class MainAgent:
                 return final
 ```
 
-This was the spine of the whole architecture. The graph was interrupted. A result arrived in the queue. The drain loop acquired the lock, resumed the graph, let it run through synthesis until it interrupted again, then released the lock and went back to waiting on the queue. Concurrent arrivals were serialised. The graph was never resumed twice in flight.
+This was the spine of the whole architecture. The graph was interrupted. A result arrived in the queue. The drain loop acquired the lock, resumed the graph, let it run through until it interrupted again, then released the lock and went back to waiting on the queue. Concurrent arrivals were serialised. The graph was never resumed twice in flight.
 
 ### Step four: user input mid-run
 
 User input is just another actor producing events into the system. The natural thing was to push user messages into the same queue and let the drain loop handle them.
 
-But with a regular FIFO queue this had a problem. Suppose three sub-agent results were already buffered in the queue, and the user typed "also check the deployment logs from this morning." The user's message went in fourth. Worse — by the time the drain loop got to it, the graph might have already finished synthesising the original three hypotheses and reached `END`. The user's hypothesis would never spawn.
+But with a regular FIFO queue this had a problem. Suppose three sub-agent results were already buffered in the queue, and the user typed "also check the deployment logs from this morning." The user's message went in fourth. Or worse: by the time the drain loop got to it, the graph might have already finished and reached `END`. The user's hypothesis would never spawn.
 
 The fix was a priority queue with two priority levels. User input was priority 0 — highest, processed first. Sub-agent results were priority 1. Whenever a user event was sitting in the queue, it jumped the line and got processed before any backlog of sub-agent completions.
 
@@ -380,11 +371,11 @@ By this point we have enabled true async nature for agents execution. But we are
 
 - Each sub-agent needs to be able to communicate its status and results back to the parent agent efficiently. This requires a reliable event propagation mechanism that can handle high concurrency and potential failures.
 
-By this point we'd accumulated three layers of machinery, each solving a different problem. It's worth naming them clearly because they composed, and each one depended on the layer below it.
+By this point we'd accumulated three layers of machinery, each solving a different problem. The task identity, events queue and trasport layer, and LangGraph reactive loop.
 
 ### Layer one: task identity
 
-Every agent run got a UUID - its `task_id`. Every sub-agent carried a `parent_task_id` pointing back to whoever spawned it. The convention we settled on was that the LangGraph thread's `thread_id` was identical to the agent's `task_id`. This sounds trivial - it was the single most important convention in the system.
+Every agent run got a UUID for its `task_id`. Every sub-agent carried a `parent_task_id` pointing back to whoever spawned it. The convention we settled on was that the LangGraph thread's `thread_id` was identical to the agent's `task_id`. This sounds trivial yet it was the single most important convention in the system.
 
 It meant that when a sub-agent published a completion event carrying `parent_task_id: task-001`, the parent agent immediately knew which LangGraph thread to resume. No lookup table. No correlation logic. The identifier on the event was the identifier of the graph that needed to wake up.
 
@@ -398,13 +389,13 @@ Main Agent (task_id: task-001, thread_id: task-001)
     └── Sub-Agent 3 (task_id: sub-3, parent_task_id: task-001)
 ```
 
-`task_id` was what was running. `parent_task_id` was what spawned it. Different identifiers, different jobs — conflating them was a reliable source of confusing bugs.
+`task_id` was what was running. `parent_task_id` was what spawned it.
 
 ### Layer two: event queue and transport
 
-Each agent wrapped its logic in a simple lifecycle — `working → completed | failed | canceled` — and emitted progress events into a shared event queue. Every event an agent published landed on the right channel automatically. Parent agents subscribed to the same channel to pick up sub-agent completions and resume graphs.
+Each agent wrapped its logic in a simple lifecycle: `working → completed | failed | canceled`. Inspired on [A2A protocol](https://a2a-protocol.org/latest/). The progress events flowed into a shared event queue. Every event an agent published landed on the right channel automatically. Parent agents subscribed to the same channel to pick up sub-agent completions and resume graphs.
 
-Alongside the PubSub broadcast, every event was also written to a durable event store indexed by `task_id`. PubSub is fire-and-forget — if you're not subscribed when a message lands, you miss it. The store covered late-joining clients catching up on an in-progress investigation. In production this would need to be a fully durable store — Back to Kafka persistence or a database — to survive pod restarts and handle crash recovery properly.
+Alongside the PubSub broadcast, every event was also written to a durable event store indexed by `task_id`. PubSub is fire-and-forget was not enough to cover the older messages that later joiner users might miss. The store covered late-joining clients catching up on an in-progress investigation. In production this would need to be a fully durable store (thinking about Kafka persistence or a database) to survive pod restarts and handle crash recovery properly.
 
 Progress reporting from graph nodes flowed through callbacks injected via LangGraph's `configurable` dict, keeping the graph nodes entirely decoupled from transport:
 
@@ -458,13 +449,13 @@ flowchart TD
 
 ### Layer three: the LangGraph reactive loop
 
-This was what we built in the previous section — the interrupt/resume graph, the priority queue, the lock. It depended entirely on the two layers below it. It used `task_id === thread_id` from layer one to know which graph to resume. It used the PubSub (Kafka or Redis) subscription from layer two to receive completion events.
+This was what we built in the previous section. The interrupt/resume graph, the priority queue, the lock. It depended entirely on the two layers below it. It used `task_id === thread_id` from layer one to know which graph to resume. It used the PubSub (Kafka or Redis) subscription from layer two to receive completion events.
 
 Strip any of the three layers away and the whole thing fell apart. Strip the identity model and you couldn't route events. Strip the event queue and there was no transport. Strip the LangGraph loop and you were back to wait-for-all parallelism with all the problems it brought.
 
 ## The thing that changed the calculus: async sub-agents
 
-While we were heads-down building all of this, LangGraph was working on the same problem from the framework side.
+While we were heads-down building all of this, LangChain team was working on the same problem from the framework side.
 
 In the final weeks of the spike we came across [LangGraph's async sub-agents](https://docs.langchain.com/oss/python/deepagents/async-subagents) -  a native extension where the supervisor launches background tasks and returns immediately, without blocking. For a lot of use cases, this is exactly the right model: the user stays in the loop, the supervisor checks progress when it makes sense, and the complexity of managing concurrent execution stays in the framework rather than your codebase.
 
@@ -494,22 +485,42 @@ flowchart TD
 
 For our specific case it's a partial fit. The diagram above shows the pull based model of interaction: the supervisor calls check_async_task when the user asks or the LLM judges it's time. There's no push notification when a sub-agent finishes. For interactive workflows where a human is driving the conversation, that's a reasonable tradeoff. For automated incident response where we want deterministic synthesis the moment each result arrives, it leaves a gap.
 
-We reached out to the LangGraph team to share this and ask about the roadmap. That conversation is ongoing.
+But looking at it honestly, that gap didn't matter as much as we'd assumed. It pointed us toward a simpler question: what's the actual latency requirement here?
 
-So for now: we're not shipping the POC, but we're also not building on top of async sub-agents yet. The maintenance cost of owning a custom reactive runtime outweighs the benefits of shipping it today.
+## Where we landed
 
+The architecture we shipped is simpler than anything described above: concurrent fan-out with a supervisor polling all sub-agents on a time-based tick. Every cycle, check everything pending, invoke LLM and surface partial results to the user.
 
-## Why we walked away
+```mermaid
+flowchart LR
+    User([User])
+    Supervisor[Supervisor]
+
+    subgraph BG [Sub-Agents — running concurrently]
+        S1[Sub-Agent 1\nDNS]
+        S2[Sub-Agent 2\nBad deploy]
+        S3[Sub-Agent 3\nDep timeout]
+    end
+
+    User -->|"investigate"| Supervisor
+    Supervisor -->|"fan-out"| S1 & S2 & S3
+    Supervisor -->|"returns immediately"| User
+
+    Supervisor -->|"poll every Xs"| S1 & S2 & S3
+    S1 & S2 & S3 -->|"status / result"| Supervisor
+    Supervisor -->|"synthesis"| User
+```
+
+No priority queues. No interrupt/resume cycles. No lock coordination.
+
+Incident investigation isn't a sub-second problem. While sub-agents run for minutes, a few seconds polling cycle is sufficient. So we decided, instead of building something complex to maintain or waiting for the framework to catch up, we just decided to ship something we could trust at 3am.
+
+{/*
+## The framework was converging on us
 
 Here's the honest version. The POC met the requirements. The code is in the repo. And then we sat down to estimate what it would take to actually ship this — and the cost-benefit math turned hostile, fast.
 
 Two things tipped the decision.
-
-### The lock and queue were in-process
-
-The POC lived entirely in one pod. The `asyncio.Queue` and `asyncio.Lock` were local to that process. Shipping this for real meant swapping them for Redis or Kafka backed equivalents for both queue and lock, and a distributed checkpointer for LangGraph state so a task could survive a pod restart. Each of those is a known-solved problem. But each is also a real piece of infrastructure to write, test, monitor, and keep correct under failure modes — pod crashes, network partitions, lost lock holders, expired TTLs. We'd be building a small distributed runtime to host a feature.
-
-### The framework was converging on us
 
 The async sub-agents work was the concrete form of what we'd been feeling abstractly: the gap between "what we built" and "what the framework gives you natively" was shrinking faster than we could add features on top. The requirements we could ship with the framework was meeting maybe 80% of the actual user need with maybe 20% of the implementation complexity. Less elegant. Less truly reactive. But far less infrastructure to own.
 
@@ -519,15 +530,15 @@ When you start a research spike, the framework is a fixed thing. You measure it 
 
 For us, the answer was no. The most valuable output of the spike was understanding the problem deeply enough to make that call with confidence. The conceptual work understanding the three execution models, the identity propagation pattern, the priority queue for user input, the cascading cancellation pattern — transfers cleanly to whatever runtime we end up using. The code was the dispensable part.
 
-So we kept the learning and dropped the artifact. And the follow-up new LangGraph's Async Sub Agents were a proof that the framework could handle the majority of the use cases and acknowledged trade-offs where the current defaults fall short. Most importantly, this meant much less maintenance for us, and much more time to focus on the problems only we can solve.
+So we kept the learning and dropped the artifact. And the follow-up new LangGraph's Async Sub Agents were a proof that the framework could handle the majority of the use cases and acknowledged trade-offs where the current defaults fall short. Most importantly, this meant much less maintenance for us, and much more time to focus on the problems only we can solve. */}
 
 
 ## Closing thought
 
-The thing I keep coming back to is that the most valuable output of this spike was a clearer understanding of when _not_ to build your own runtime. We started with a real problem. Single agents breaking down under the weight of context rot, instruction overload, and sequential execution. We built a working system that addressed it, and then recognised that the path to shipping it would cost more than it was worth, particularly once we saw the framework converging on the same solution.
+The most valuable output of this spike was a clearer understanding of when _not_ to build your own runtime. We started with a real problem. Single agents breaking down under the weight of context rot, instruction overload, and sequential execution. We built a working system that addressed it, and then recognised that the path to shipping it would cost more than it was worth, particularly once we saw the framework converging on the same solution.
 
-That's not a failure. It's the version of "build vs buy" you only get to do honestly after you've actually built one of the options. You can read all the framework docs in the world and not know what you're trading off. Building the alternative, even just enough to demo it, gives you the actual feel of the trade-off. And then, ideally, you stop.
+For us at PagerDuty, it's the version of "build vs buy" we can confidently decide after actually building one of the options. Building the proof of concept, even just enough to demo it, gave us the actual feel of the trade-off. Such experimentation is at the core of our engineering culture.
 
-What I'd tell my past self at the start of this spike: timebox it harder, decide upfront what evidence would make you walk away, check in with the teams building the frameworks you're working on top of, and assume those frameworks are getting materially better while you're working. None of that means don't do the spike. The conceptual lessons here are real and we use them every day. It just means be honest about what you're doing — exploring a design space, not shipping a product — and let the artifact be disposable when the time comes.
+Being rigorous in experimentation is another learning we can extract from this experience. In the future, we will timebox it harder, decide upfront what evidence would change our minds, check in with the teams building the frameworks more regularly. Most importantly, assume those frameworks are getting materially better while we are working. The conceptual lessons here are real and we use them every day.
 
 That's where this one landed. A POC, some good diagrams, a working repo, a conversation with the LangGraph team, and a lot of clarity about what reactive multi-agent systems actually cost. For now, that's the right place to be.
